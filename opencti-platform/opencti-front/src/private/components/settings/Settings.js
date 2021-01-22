@@ -20,13 +20,11 @@ import { commitMutation, QueryRenderer } from '../../../relay/environment';
 import inject18n from '../../../components/i18n';
 import TextField from '../../../components/TextField';
 import SelectField from '../../../components/SelectField';
-import SettingsMenu from './SettingsMenu';
 import Loader from '../../../components/Loader';
 
 const styles = () => ({
   container: {
     margin: 0,
-    padding: '0 200px 0 0',
   },
   paper: {
     width: '100%',
@@ -106,7 +104,7 @@ const settingsValidation = (t) => Yup.object().shape({
 });
 
 class Settings extends Component {
-  // eslint-disable-next-line
+  // eslint-disable-next-line class-methods-use-this
   handleChangeFocus(id, name) {
     commitMutation({
       mutation: settingsFocus,
@@ -131,23 +129,7 @@ class Settings extends Component {
       .catch(() => false);
   }
 
-  getConfig(parameters, service) {
-    switch (service) {
-      case 'grakn':
-        return `${parameters.grakn.hostname}:${parameters.grakn.port}`;
-      case 'elasticsearch':
-        return parameters.elasticsearch.url;
-      case 'redis':
-        return `${parameters.redis.hostname}:${parameters.redis.port}`;
-      case 'minio':
-        return `${parameters.minio.endpoint}:${parameters.minio.port}`;
-      case 'rabbitmq':
-        return `${parameters.rabbitmq.hostname}:${parameters.rabbitmq.port}`;
-      default:
-        return 'Unknown';
-    }
-  }
-
+  // eslint-disable-next-line class-methods-use-this
   getProviderConfig(provider) {
     switch (provider.strategy) {
       case 'LocalStrategy':
@@ -169,7 +151,6 @@ class Settings extends Component {
     const { t, classes } = this.props;
     return (
       <div className={classes.container}>
-        <SettingsMenu />
         <QueryRenderer
           query={settingsQuery}
           render={({ props }) => {
@@ -316,7 +297,7 @@ class Settings extends Component {
                                   <Avatar>{i}</Avatar>
                                 </ListItemAvatar>
                                 <ListItemText
-                                  primary={t(provider.strategy)}
+                                  primary={provider.strategy}
                                   secondary={this.getProviderConfig(provider)}
                                 />
                               </ListItem>
@@ -331,9 +312,12 @@ class Settings extends Component {
                       <Paper classes={{ root: classes.paper }} elevation={2}>
                         <QueryRenderer
                           query={settingsAboutQuery}
-                          render={({ props }) => {
-                            if (props) {
-                              const { version, dependencies } = props.about;
+                          render={({ props: aboutProps }) => {
+                            if (aboutProps) {
+                              const {
+                                version,
+                                dependencies,
+                              } = aboutProps.about;
                               return (
                                 <div>
                                   <Typography variant="h1" gutterBottom={true}>
@@ -341,21 +325,12 @@ class Settings extends Component {
                                   </Typography>
                                   <List>
                                     <ListItem divider={true}>
-                                      <ListItemText
-                                        primary={'OpenCTI'}
-                                        secondary={`0.0.0.0:${parameters.app.port}`}
-                                      />
+                                      <ListItemText primary={'OpenCTI'} />
                                       <Chip label={version} />
                                     </ListItem>
                                     {dependencies.map((dep) => (
                                       <ListItem key={dep.name} divider={true}>
-                                        <ListItemText
-                                          primary={t(dep.name)}
-                                          secondary={this.getConfig(
-                                            parameters,
-                                            dep.name.toLowerCase(),
-                                          )}
-                                        />
+                                        <ListItemText primary={t(dep.name)} />
                                         <Chip label={dep.version} />
                                       </ListItem>
                                     ))}

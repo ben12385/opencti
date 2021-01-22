@@ -20,6 +20,7 @@ import inject18n from '../../../../components/i18n';
 import { commitMutation } from '../../../../relay/environment';
 import TextField from '../../../../components/TextField';
 import SelectField from '../../../../components/SelectField';
+import MarkDownField from '../../../../components/MarkDownField';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -185,10 +186,10 @@ class IdentityCreation extends Component {
                     name="name"
                     label={t('Name')}
                     fullWidth={true}
-                    detectDuplicate={['Organization', 'User']}
+                    detectDuplicate={['Organization', 'Individual']}
                   />
                   <Field
-                    component={TextField}
+                    component={MarkDownField}
                     name="description"
                     label={t('Description')}
                     fullWidth={true}
@@ -211,10 +212,7 @@ class IdentityCreation extends Component {
                     <MenuItem value="Organization">
                       {t('Organization')}
                     </MenuItem>
-                    <MenuItem value="Region">{t('Region')}</MenuItem>
-                    <MenuItem value="Country">{t('Country')}</MenuItem>
-                    <MenuItem value="City">{t('City')}</MenuItem>
-                    <MenuItem value="User">{t('Person')}</MenuItem>
+                    <MenuItem value="Individual">{t('Individual')}</MenuItem>
                   </Field>
                   <div className={classes.buttons}>
                     <Button
@@ -275,10 +273,10 @@ class IdentityCreation extends Component {
                     name="name"
                     label={t('Name')}
                     fullWidth={true}
-                    detectDuplicate={['Organization', 'User']}
+                    detectDuplicate={['Organization', 'Individual']}
                   />
                   <Field
-                    component={TextField}
+                    component={MarkDownField}
                     name="description"
                     label={t('Description')}
                     fullWidth={true}
@@ -316,7 +314,7 @@ class IdentityCreation extends Component {
                     ) : (
                       ''
                     )}
-                    <MenuItem value="User">{t('Person')}</MenuItem>
+                    <MenuItem value="Individual">{t('Individual')}</MenuItem>
                   </Field>
                 </DialogContent>
                 <DialogActions>

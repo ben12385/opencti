@@ -1,17 +1,22 @@
-import { findAll, logsWorkerConfig } from '../domain/log';
-import { findById } from '../domain/user';
+import { findAll, logsTimeSeries, logsWorkerConfig } from '../domain/log';
+import { findById, SYSTEM_USER } from '../domain/user';
 
 const logResolvers = {
   Query: {
     logs: (_, args) => findAll(args),
+    logsTimeSeries: (_, args) => logsTimeSeries(args),
     logsWorkerConfig: () => logsWorkerConfig(),
   },
   Log: {
-    event_user: (log) => findById(log.event_user),
+    user: async (log) => {
+      const user = await findById(log.applicant_id || log.user_id);
+      return user || SYSTEM_USER;
+    },
   },
   LogsFilter: {
-    entity_id: 'event_data.x_opencti_id',
-    connection_id: 'event_data.x_opencti_*_ref',
+    entity_id: 'context_data.id',
+    connection_id: 'context_data.*_id',
+    user_id: '*_id',
   },
 };
 

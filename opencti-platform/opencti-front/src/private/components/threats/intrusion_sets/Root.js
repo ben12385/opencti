@@ -8,18 +8,19 @@ import {
 } from '../../../../relay/environment';
 import TopBar from '../../nav/TopBar';
 import IntrusionSet from './IntrusionSet';
-import IntrusionSetReports from './IntrusionSetReports';
 import IntrusionSetKnowledge from './IntrusionSetKnowledge';
-import IntrusionSetIndicators from './IntrusionSetIndicators';
-import StixDomainEntityHeader from '../../common/stix_domain_entities/StixDomainEntityHeader';
+import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
 import FileManager from '../../common/files/FileManager';
 import IntrusionSetPopover from './IntrusionSetPopover';
 import Loader from '../../../../components/Loader';
-import StixObjectHistory from '../../common/stix_object/StixObjectHistory';
+import StixCoreObjectHistory from '../../common/stix_core_objects/StixCoreObjectHistory';
+import StixCoreObjectOrStixCoreRelationshipContainers from '../../common/containers/StixCoreObjectOrStixCoreRelationshipContainers';
+import StixDomainObjectIndicators from '../../observations/indicators/StixDomainObjectIndicators';
+import StixCoreRelationship from '../../common/stix_core_relationships/StixCoreRelationship';
 
 const subscription = graphql`
   subscription RootIntrusionSetSubscription($id: ID!) {
-    stixDomainEntity(id: $id) {
+    stixDomainObject(id: $id) {
       ... on IntrusionSet {
         ...IntrusionSet_intrusionSet
         ...IntrusionSetEditionContainer_intrusionSet
@@ -34,12 +35,11 @@ const intrusionSetQuery = graphql`
   query RootIntrusionSetQuery($id: String!) {
     intrusionSet(id: $id) {
       id
+      standard_id
       name
-      alias
+      aliases
       ...IntrusionSet_intrusionSet
-      ...IntrusionSetReports_intrusionSet
       ...IntrusionSetKnowledge_intrusionSet
-      ...IntrusionSetIndicators_intrusionSet
       ...FileImportViewer_entity
       ...FileExportViewer_entity
     }
@@ -96,16 +96,6 @@ class RootIntrusionSet extends Component {
                   />
                   <Route
                     exact
-                    path="/dashboard/threats/intrusion_sets/:intrusionSetId/reports"
-                    render={(routeProps) => (
-                      <IntrusionSetReports
-                        {...routeProps}
-                        intrusionSet={props.intrusionSet}
-                      />
-                    )}
-                  />
-                  <Route
-                    exact
                     path="/dashboard/threats/intrusion_sets/:intrusionSetId/knowledge"
                     render={() => (
                       <Redirect
@@ -123,11 +113,48 @@ class RootIntrusionSet extends Component {
                     )}
                   />
                   <Route
+                    exact
+                    path="/dashboard/threats/intrusion_sets/:intrusionSetId/analysis"
+                    render={(routeProps) => (
+                      <React.Fragment>
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.intrusionSet}
+                          PopoverComponent={<IntrusionSetPopover />}
+                        />
+                        <StixCoreObjectOrStixCoreRelationshipContainers
+                          {...routeProps}
+                          stixCoreObjectOrStixCoreRelationshipId={
+                            intrusionSetId
+                          }
+                        />
+                      </React.Fragment>
+                    )}
+                  />
+                  <Route
+                    exact
                     path="/dashboard/threats/intrusion_sets/:intrusionSetId/indicators"
                     render={(routeProps) => (
-                      <IntrusionSetIndicators
+                      <React.Fragment>
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.intrusionSet}
+                          PopoverComponent={<IntrusionSetPopover />}
+                          variant="noaliases"
+                        />
+                        <StixDomainObjectIndicators
+                          {...routeProps}
+                          stixDomainObjectId={intrusionSetId}
+                          stixDomainObjectLink={`/dashboard/threats/intrusion_sets/${intrusionSetId}/indicators`}
+                        />
+                      </React.Fragment>
+                    )}
+                  />
+                  <Route
+                    exact
+                    path="/dashboard/threats/intrusion_sets/:intrusionSetId/indicators/relations/:relationId"
+                    render={(routeProps) => (
+                      <StixCoreRelationship
+                        entityId={intrusionSetId}
                         {...routeProps}
-                        intrusionSet={props.intrusionSet}
                       />
                     )}
                   />
@@ -136,13 +163,14 @@ class RootIntrusionSet extends Component {
                     path="/dashboard/threats/intrusion_sets/:intrusionSetId/files"
                     render={(routeProps) => (
                       <React.Fragment>
-                        <StixDomainEntityHeader
-                          stixDomainEntity={props.intrusionSet}
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.intrusionSet}
                           PopoverComponent={<IntrusionSetPopover />}
                         />
                         <FileManager
                           {...routeProps}
                           id={intrusionSetId}
+                          connectorsImport={[]}
                           connectorsExport={props.connectorsForExport}
                           entity={props.intrusionSet}
                         />
@@ -154,13 +182,13 @@ class RootIntrusionSet extends Component {
                     path="/dashboard/threats/intrusion_sets/:intrusionSetId/history"
                     render={(routeProps) => (
                       <React.Fragment>
-                        <StixDomainEntityHeader
-                          stixDomainEntity={props.intrusionSet}
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.intrusionSet}
                           PopoverComponent={<IntrusionSetPopover />}
                         />
-                        <StixObjectHistory
+                        <StixCoreObjectHistory
                           {...routeProps}
-                          entityId={intrusionSetId}
+                          stixCoreObjectId={intrusionSetId}
                         />
                       </React.Fragment>
                     )}

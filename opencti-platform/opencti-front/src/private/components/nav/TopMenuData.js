@@ -26,6 +26,24 @@ class TopMenuData extends Component {
       <div>
         <Button
           component={Link}
+          to="/dashboard/data/connectors"
+          variant={
+            location.pathname.includes('/dashboard/data/connectors')
+              ? 'contained'
+              : 'text'
+          }
+          size="small"
+          color={
+            location.pathname.includes('/dashboard/data/connectors')
+              ? 'primary'
+              : 'inherit'
+          }
+          classes={{ root: classes.button }}
+        >
+          {t('Connectors & workers')}
+        </Button>
+        <Button
+          component={Link}
           to="/dashboard/data/curation"
           variant={
             location.pathname === '/dashboard/data/curation'
@@ -42,24 +60,6 @@ class TopMenuData extends Component {
         >
           {t('Data curation')}
         </Button>
-        <Button
-          component={Link}
-          to="/dashboard/data/connectors"
-          variant={
-            location.pathname === '/dashboard/data/connectors'
-              ? 'contained'
-              : 'text'
-          }
-          size="small"
-          color={
-            location.pathname === '/dashboard/data/connectors'
-              ? 'primary'
-              : 'inherit'
-          }
-          classes={{ root: classes.button }}
-        >
-          {t('Connectors & workers')}
-        </Button>
       </div>
     );
   }
@@ -72,8 +72,4 @@ TopMenuData.propTypes = {
   history: PropTypes.object,
 };
 
-export default compose(
-  inject18n,
-  withRouter,
-  withStyles(styles),
-)(TopMenuData);
+export default compose(inject18n, withRouter, withStyles(styles))(TopMenuData);

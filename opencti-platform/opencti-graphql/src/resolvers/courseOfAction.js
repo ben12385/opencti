@@ -1,13 +1,17 @@
-import { addCourseOfAction, findAll, findById, attackPatterns } from '../domain/courseOfAction';
+import { addCourseOfAction, findAll, findById, batchAttackPatterns } from '../domain/courseOfAction';
 import {
-  stixDomainEntityAddRelation,
-  stixDomainEntityCleanContext,
-  stixDomainEntityDelete,
-  stixDomainEntityDeleteRelation,
-  stixDomainEntityEditContext,
-  stixDomainEntityEditField,
-} from '../domain/stixDomainEntity';
-import { REL_INDEX_PREFIX } from '../database/elasticSearch';
+  stixDomainObjectAddRelation,
+  stixDomainObjectCleanContext,
+  stixDomainObjectDelete,
+  stixDomainObjectDeleteRelation,
+  stixDomainObjectEditContext,
+  stixDomainObjectEditField,
+} from '../domain/stixDomainObject';
+import { RELATION_CREATED_BY, RELATION_OBJECT_LABEL, RELATION_OBJECT_MARKING } from '../schema/stixMetaRelationship';
+import { REL_INDEX_PREFIX } from '../schema/general';
+import { initBatchLoader } from '../database/middleware';
+
+const attackPatternsLoader = initBatchLoader(batchAttackPatterns);
 
 const courseOfActionResolvers = {
   Query: {
@@ -15,26 +19,23 @@ const courseOfActionResolvers = {
     coursesOfAction: (_, args) => findAll(args),
   },
   CourseOfAction: {
-    attackPatterns: (courseOfAction) => attackPatterns(courseOfAction.id),
-  },
-  CoursesOfActionOrdering: {
-    tags: `${REL_INDEX_PREFIX}tagged.value`,
-    markingDefinitions: `${REL_INDEX_PREFIX}object_marking_refs.definition`,
+    attackPatterns: (courseOfAction) => attackPatternsLoader.load(courseOfAction.id),
   },
   CoursesOfActionFilter: {
-    createdBy: `${REL_INDEX_PREFIX}created_by_ref.internal_id_key`,
-    markingDefinitions: `${REL_INDEX_PREFIX}object_marking_refs.internal_id_key`,
-    tags: `${REL_INDEX_PREFIX}tagged.internal_id_key`,
-    mitigateBy: `${REL_INDEX_PREFIX}mitigates.internal_id_key`,
+    createdBy: `${REL_INDEX_PREFIX}${RELATION_CREATED_BY}.internal_id`,
+    markedBy: `${REL_INDEX_PREFIX}${RELATION_OBJECT_MARKING}.internal_id`,
+    labelledBy: `${REL_INDEX_PREFIX}${RELATION_OBJECT_LABEL}.internal_id`,
+    mitigatedBy: `${REL_INDEX_PREFIX}mitigates.internal_id`,
   },
   Mutation: {
     courseOfActionEdit: (_, { id }, { user }) => ({
-      delete: () => stixDomainEntityDelete(user, id),
-      fieldPatch: ({ input }) => stixDomainEntityEditField(user, id, input),
-      contextPatch: ({ input }) => stixDomainEntityEditContext(user, id, input),
-      contextClean: () => stixDomainEntityCleanContext(user, id),
-      relationAdd: ({ input }) => stixDomainEntityAddRelation(user, id, input),
-      relationDelete: ({ relationId }) => stixDomainEntityDeleteRelation(user, id, relationId),
+      delete: () => stixDomainObjectDelete(user, id),
+      fieldPatch: ({ input }) => stixDomainObjectEditField(user, id, input),
+      contextPatch: ({ input }) => stixDomainObjectEditContext(user, id, input),
+      contextClean: () => stixDomainObjectCleanContext(user, id),
+      relationAdd: ({ input }) => stixDomainObjectAddRelation(user, id, input),
+      relationDelete: ({ toId, relationship_type: relationshipType }) =>
+        stixDomainObjectDeleteRelation(user, id, toId, relationshipType),
     }),
     courseOfActionAdd: (_, { input }, { user }) => addCourseOfAction(user, input),
   },

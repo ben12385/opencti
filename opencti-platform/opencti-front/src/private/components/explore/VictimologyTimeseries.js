@@ -3,8 +3,8 @@ import PropTypes from 'prop-types';
 import { compose, propOr, pathOr } from 'ramda';
 import { withStyles } from '@material-ui/core/styles';
 import inject18n from '../../../components/i18n';
-import EntityStixRelationsChart from '../common/stix_relations/EntityStixRelationsChart';
-import EntityStixRelationsTableTime from '../common/stix_relations/EntityStixRelationsTableTime';
+import EntityStixCoreRelationshipsChart from '../common/stix_core_relationships/EntityStixCoreRelationshipsChart';
+import EntityStixCoreRelationshipsTableTime from '../common/stix_core_relationships/EntityStixCoreRelationshipsTableTime';
 
 const styles = () => ({
   container: {
@@ -15,52 +15,45 @@ const styles = () => ({
 class VictimologyDistribution extends Component {
   render() {
     const {
-      configuration,
-      handleOpenConfig,
-      inferred,
-      startDate,
-      endDate,
+      configuration, handleOpenConfig, startDate, endDate,
     } = this.props;
     switch (configuration.graph_type) {
       case 'table':
         return (
-          <EntityStixRelationsTableTime
+          <EntityStixCoreRelationshipsTableTime
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
-            relationType="targets"
+            relationshipType="targets"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
         );
       case 'line':
         return (
-          <EntityStixRelationsChart
+          <EntityStixCoreRelationshipsChart
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
-            relationType="targets"
-            inferred={inferred}
+            relationshipType="targets"
             startDate={startDate}
             endDate={endDate}
           />
         );
       default:
         return (
-          <EntityStixRelationsChart
+          <EntityStixCoreRelationshipsChart
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
-            relationType="targets"
-            inferred={inferred}
+            relationshipType="targets"
             startDate={startDate}
             endDate={endDate}
           />
@@ -72,7 +65,6 @@ class VictimologyDistribution extends Component {
 VictimologyDistribution.propTypes = {
   configuration: PropTypes.object,
   handleOpenConfig: PropTypes.func,
-  inferred: PropTypes.bool,
   startDate: PropTypes.string,
   endDate: PropTypes.string,
   classes: PropTypes.object,

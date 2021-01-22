@@ -3,20 +3,26 @@
     "port": 4000,
     "logs": "./logs",
     "logs_level": "info",
+    "rate_protection": {
+      "time_window": 1,
+      "max_requests": 10000
+    },
+    "concurrency": {
+      "retry_count": 200,
+      "retry_delay": 100,
+      "retry_jitter": 50,
+      "max_ttl": 30000
+    },
     "cookie_secure": false,
-    "base_path" : "",
+    "base_path": "",
     "platform_demo": false,
     "performance_logger": false,
+    "map_tile_server": "https://map.opencti.io/styles/1fdd936a-084b-46ac-a948-22ce1686aadf/{z}/{x}/{y}.png",
     "admin": {
       "email": "admin@opencti.io",
       "password": "ChangeMe",
       "token": "ChangeMe"
     }
-  },
-  "grakn": {
-    "hostname": "localhost",
-    "port": 48555,
-    "timeout": 30000
   },
   "redis": {
     "hostname": "localhost",

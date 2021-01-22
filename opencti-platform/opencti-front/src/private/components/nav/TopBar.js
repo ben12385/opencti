@@ -6,44 +6,46 @@ import { withStyles } from '@material-ui/core/styles';
 import AppBar from '@material-ui/core/AppBar';
 import Toolbar from '@material-ui/core/Toolbar';
 import IconButton from '@material-ui/core/IconButton';
-import { AccountCircleOutlined } from '@material-ui/icons';
+import { AccountCircleOutlined, ExploreOutlined } from '@material-ui/icons';
 import { UploadOutline } from 'mdi-material-ui';
 import Menu from '@material-ui/core/Menu';
 import MenuItem from '@material-ui/core/MenuItem';
 import Tooltip from '@material-ui/core/Tooltip';
 import graphql from 'babel-plugin-relay/macro';
-import logo from '../../../resources/images/logo.png';
+import logo from '../../../resources/images/logo_text.png';
 import inject18n from '../../../components/i18n';
 import SearchInput from '../../../components/SearchInput';
 import TopMenuDashboard from './TopMenuDashboard';
 import TopMenuSearch from './TopMenuSearch';
-import TopMenuExplore from './TopMenuExplore';
-import TopMenuExploreWorkspace from './TopMenuExploreWorkspace';
-import TopMenuInvestigate from './TopMenuInvestigate';
-import TopMenuInvestigateWorkspace from './TopMenuInvestigateWorkspace';
-import TopMenuKnowledge from './TopMenuThreats';
+import TopMenuAnalysis from './TopMenuAnalysis';
+import TopMenuReport from './TopMenuReport';
+import TopMenuNote from './TopMenuNote';
+import TopMenuOpinion from './TopMenuOpinion';
+import TopMenuExternalReference from './TopMenuExternalReference';
+import TopMenuEvents from './TopMenuEvents';
+import TopMenuXOpenCTIIncident from './TopMenuXOpenCTIIncident';
+import TopMenuObservedData from './TopMenuObservedData';
+import TopMenuStixRelationshipSighting from './TopMenuStixRelationshipSighting';
+import TopMenuObservations from './TopMenuObservations';
+import TopMenuIndicator from './TopMenuIndicator';
+import TopMenuInfrastructure from './TopMenuInfrastructure';
+import TopMenuStixCyberObservable from './TopMenuStixCyberObservable';
+import TopMenuThreats from './TopMenuThreats';
 import TopMenuThreatActor from './TopMenuThreatActor';
-import TopMenuSector from './TopMenuSector';
 import TopMenuIntrusionSet from './TopMenuIntrusionSet';
 import TopMenuCampaign from './TopMenuCampaign';
-import TopMenuIncident from './TopMenuIncident';
+import TopMenuArsenal from './TopMenuArsenal';
 import TopMenuMalware from './TopMenuMalware';
-import TopMenuTechniques from './TopMenuTechniques';
-import TopMenuAttackPattern from './TopMenuAttackPattern';
-import TopMenuCourseOfAction from './TopMenuCourseOfAction';
 import TopMenuTool from './TopMenuTool';
+import TopMenuAttackPattern from './TopMenuAttackPattern';
 import TopMenuVulnerability from './TopMenuVulnerability';
-import TopMenuRegion from './TopMenuRegion';
-import TopMenuSignatures from './TopMenuSignatures';
-import TopMenuObservable from './TopMenuObservable';
-import TopMenuIndicator from './TopMenuIndicator';
-import TopMenuReports from './TopMenuReports';
-import TopMenuReport from './TopMenuReport';
 import TopMenuEntities from './TopMenuEntities';
+import TopMenuSector from './TopMenuSector';
+import TopMenuOrganization from './TopMenuOrganization';
+import TopMenuIndividual from './TopMenuIndividual';
+import TopMenuRegion from './TopMenuRegion';
 import TopMenuCountry from './TopMenuCountry';
 import TopMenuCity from './TopMenuCity';
-import TopMenuOrganization from './TopMenuOrganization';
-import TopMenuPerson from './TopMenuPerson';
 import TopMenuData from './TopMenuData';
 import TopMenuSettings from './TopMenuSettings';
 import TopMenuProfile from './TopMenuProfile';
@@ -51,7 +53,9 @@ import { commitMutation } from '../../../relay/environment';
 import Security, {
   KNOWLEDGE,
   KNOWLEDGE_KNASKIMPORT,
+  EXPLORE,
 } from '../../../utils/Security';
+import TopMenuCourseOfAction from './TopMenuCourseOfAction';
 
 const styles = (theme) => ({
   appBar: {
@@ -63,9 +67,8 @@ const styles = (theme) => ({
   flex: {
     flexGrow: 1,
   },
-  logoButton: {
-    marginLeft: -20,
-    marginRight: 20,
+  logoContainer: {
+    marginLeft: -10,
   },
   logo: {
     cursor: 'pointer',
@@ -73,6 +76,7 @@ const styles = (theme) => ({
   },
   menuContainer: {
     float: 'left',
+    marginLeft: 40,
   },
   barRight: {
     position: 'absolute',
@@ -109,7 +113,7 @@ const TopBar = ({
     commitMutation({
       mutation: logoutMutation,
       variables: {},
-      onCompleted: () => history.push('/login?message=You have successfully logged out.'),
+      onCompleted: () => history.push('/'),
     });
   };
   const handleSearch = (searchKeyword) => {
@@ -127,18 +131,13 @@ const TopBar = ({
       style={{ backgroundColor: '#1b2226' }}
     >
       <Toolbar>
-        <IconButton
-          classes={{ root: classes.logoButton }}
-          color="inherit"
-          aria-label="Menu"
-          component={Link}
-          to="/dashboard"
-        >
-          <img src={logo} alt="logo" className={classes.logo} />
-        </IconButton>
+        <div className={classes.logoContainer}>
+          <Link to="/dashboard">
+            <img src={logo} alt="logo" className={classes.logo} />
+          </Link>
+        </div>
         <div className={classes.menuContainer}>
           {location.pathname === '/dashboard'
-          || location.pathname === '/dashboard/entities'
           || location.pathname === '/dashboard/import' ? (
             <TopMenuDashboard />
             ) : (
@@ -149,25 +148,83 @@ const TopBar = ({
           ) : (
             ''
           )}
-          {location.pathname === '/dashboard/explore' ? <TopMenuExplore /> : ''}
-          {location.pathname.includes('/dashboard/explore/') ? (
-            <TopMenuExploreWorkspace />
+          {location.pathname === '/dashboard/analysis'
+          || location.pathname.match('/dashboard/analysis/[a-z_]+$') ? (
+            <TopMenuAnalysis />
+            ) : (
+              ''
+            )}
+          {location.pathname.includes('/dashboard/analysis/reports/') ? (
+            <TopMenuReport />
           ) : (
             ''
           )}
-          {location.pathname === '/dashboard/investigate' ? (
-            <TopMenuInvestigate />
+          {location.pathname.includes('/dashboard/analysis/notes/') ? (
+            <TopMenuNote />
           ) : (
             ''
           )}
-          {location.pathname.includes('/dashboard/investigate/') ? (
-            <TopMenuInvestigateWorkspace />
+          {location.pathname.includes('/dashboard/analysis/opinions/') ? (
+            <TopMenuOpinion />
           ) : (
             ''
           )}
+          {location.pathname.includes(
+            '/dashboard/analysis/external_references/',
+          ) ? (
+            <TopMenuExternalReference />
+            ) : (
+              ''
+            )}
+          {location.pathname === '/dashboard/events'
+          || location.pathname.match('/dashboard/events/[a-z_]+$') ? (
+            <TopMenuEvents />
+            ) : (
+              ''
+            )}
+          {location.pathname.includes('/dashboard/events/incidents/') ? (
+            <TopMenuXOpenCTIIncident />
+          ) : (
+            ''
+          )}
+          {location.pathname.includes('/dashboard/events/observed_data/') ? (
+            <TopMenuObservedData />
+          ) : (
+            ''
+          )}
+          {location.pathname.includes('/dashboard/events/sightings/') ? (
+            <TopMenuStixRelationshipSighting />
+          ) : (
+            ''
+          )}
+          {location.pathname === '/dashboard/observations'
+          || location.pathname.match('/dashboard/observations/[a-z_]+$') ? (
+            <TopMenuObservations />
+            ) : (
+              ''
+            )}
+          {location.pathname.includes('/dashboard/observations/indicators/') ? (
+            <TopMenuIndicator />
+          ) : (
+            ''
+          )}
+          {location.pathname.includes(
+            '/dashboard/observations/infrastructures/',
+          ) ? (
+            <TopMenuInfrastructure />
+            ) : (
+              ''
+            )}
+          {location.pathname.includes(
+            '/dashboard/observations/observables/',
+          ) ? (
+            <TopMenuStixCyberObservable />
+            ) : (
+              ''
+            )}
           {location.pathname === '/dashboard/threats'
           || location.pathname.match('/dashboard/threats/[a-z_]+$') ? (
-            <TopMenuKnowledge />
+            <TopMenuThreats />
             ) : (
               ''
             )}
@@ -186,72 +243,36 @@ const TopBar = ({
           ) : (
             ''
           )}
-          {location.pathname.includes('/dashboard/threats/incidents/') ? (
-            <TopMenuIncident />
-          ) : (
-            ''
-          )}
-          {location.pathname.includes('/dashboard/threats/malwares/') ? (
+          {location.pathname === '/dashboard/arsenal'
+          || location.pathname.match('/dashboard/arsenal/[a-z_]+$') ? (
+            <TopMenuArsenal />
+            ) : (
+              ''
+            )}
+          {location.pathname.includes('/dashboard/arsenal/malwares/') ? (
             <TopMenuMalware />
           ) : (
             ''
           )}
-          {location.pathname === '/dashboard/techniques'
-          || location.pathname.match('/dashboard/techniques/[a-z_]+$') ? (
-            <TopMenuTechniques />
-            ) : (
-              ''
-            )}
-          {location.pathname.includes(
-            '/dashboard/techniques/attack_patterns/',
-          ) ? (
+          {location.pathname.includes('/dashboard/arsenal/tools/') ? (
+            <TopMenuTool />
+          ) : (
+            ''
+          )}
+          {location.pathname.includes('/dashboard/arsenal/attack_patterns/') ? (
             <TopMenuAttackPattern />
-            ) : (
-              ''
-            )}
+          ) : (
+            ''
+          )}
           {location.pathname.includes(
-            '/dashboard/techniques/courses_of_action/',
+            '/dashboard/arsenal/courses_of_action/',
           ) ? (
             <TopMenuCourseOfAction />
             ) : (
               ''
             )}
-          {location.pathname.includes('/dashboard/techniques/tools/') ? (
-            <TopMenuTool />
-          ) : (
-            ''
-          )}
-          {location.pathname.includes(
-            '/dashboard/techniques/vulnerabilities/',
-          ) ? (
+          {location.pathname.includes('/dashboard/arsenal/vulnerabilities/') ? (
             <TopMenuVulnerability />
-            ) : (
-              ''
-            )}
-          {location.pathname === '/dashboard/signatures'
-          || location.pathname.match('/dashboard/signatures/[a-z1-9_]+$') ? (
-            <TopMenuSignatures />
-            ) : (
-              ''
-            )}
-          {location.pathname.includes('/dashboard/signatures/observables/') ? (
-            <TopMenuObservable />
-          ) : (
-            ''
-          )}
-          {location.pathname.includes('/dashboard/signatures/indicators/') ? (
-            <TopMenuIndicator />
-          ) : (
-            ''
-          )}
-          {location.pathname === '/dashboard/reports'
-          || location.pathname.match('/dashboard/reports/[a-zA-Z1-9_-]+$') ? (
-            <TopMenuReports />
-            ) : (
-              ''
-            )}
-          {location.pathname.includes('/dashboard/reports/all/') ? (
-            <TopMenuReport />
           ) : (
             ''
           )}
@@ -263,6 +284,16 @@ const TopBar = ({
             )}
           {location.pathname.includes('/dashboard/entities/sectors/') ? (
             <TopMenuSector />
+          ) : (
+            ''
+          )}
+          {location.pathname.includes('/dashboard/entities/organizations/') ? (
+            <TopMenuOrganization />
+          ) : (
+            ''
+          )}
+          {location.pathname.includes('/dashboard/entities/individuals/') ? (
+            <TopMenuIndividual />
           ) : (
             ''
           )}
@@ -281,22 +312,7 @@ const TopBar = ({
           ) : (
             ''
           )}
-          {location.pathname.includes('/dashboard/entities/organizations/') ? (
-            <TopMenuOrganization />
-          ) : (
-            ''
-          )}
-          {location.pathname.includes('/dashboard/entities/persons/') ? (
-            <TopMenuPerson />
-          ) : (
-            ''
-          )}
-          {location.pathname === '/dashboard/data'
-          || location.pathname.match('/dashboard/data/[a-z_]+$') ? (
-            <TopMenuData />
-            ) : (
-              ''
-            )}
+          {location.pathname.includes('/dashboard/data') ? <TopMenuData /> : ''}
           {location.pathname.includes('/dashboard/settings') ? (
             <TopMenuSettings />
           ) : (
@@ -309,6 +325,28 @@ const TopBar = ({
             <div className={classes.searchContainer}>
               <SearchInput onSubmit={handleSearch} keyword={keyword} />
             </div>
+          </Security>
+          <Security needs={[EXPLORE]}>
+            <Tooltip title={t('Investigate')}>
+              <IconButton
+                disabled={true}
+                component={Link}
+                to="/dashboard/investigate"
+                variant={
+                  location.pathname === '/dashboard/investigate'
+                    ? 'contained'
+                    : 'text'
+                }
+                color={
+                  location.pathname === '/dashboard/investigate'
+                    ? 'primary'
+                    : 'inherit'
+                }
+                classes={{ root: classes.button }}
+              >
+                <ExploreOutlined fontSize="default" />
+              </IconButton>
+            </Tooltip>
           </Security>
           <Security needs={[KNOWLEDGE_KNASKIMPORT]}>
             <Tooltip title={t('Data import')}>
@@ -327,7 +365,7 @@ const TopBar = ({
                 }
                 classes={{ root: classes.button }}
               >
-                <UploadOutline fontSize="large" />
+                <UploadOutline fontSize="default" />
               </IconButton>
             </Tooltip>
           </Security>
@@ -339,7 +377,7 @@ const TopBar = ({
             onClick={handleOpenMenu}
             color="inherit"
           >
-            <AccountCircleOutlined fontSize="large" />
+            <AccountCircleOutlined fontSize="default" />
           </IconButton>
           <Menu
             id="menu-appbar"

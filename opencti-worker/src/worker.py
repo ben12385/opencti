@@ -2,6 +2,8 @@
 
 import logging
 import functools
+import random
+
 import yaml
 import pika
 import os
@@ -10,12 +12,11 @@ import json
 import base64
 import threading
 import ctypes
-import uuid
 
 from requests.exceptions import RequestException
-from itertools import groupby
-from elasticsearch import Elasticsearch
 from pycti import OpenCTIApiClient
+
+PROCESSING_COUNT = 5
 
 
 class Consumer(threading.Thread):
@@ -25,11 +26,20 @@ class Consumer(threading.Thread):
         self.opencti_token = opencti_token
         self.api = OpenCTIApiClient(self.opencti_url, self.opencti_token)
         self.queue_name = connector["config"]["push"]
-        self.pika_connection = pika.BlockingConnection(
-            pika.URLParameters(connector["config"]["uri"])
+        self.pika_credentials = pika.PlainCredentials(
+            connector["config"]["connection"]["user"],
+            connector["config"]["connection"]["pass"],
         )
+        self.pika_parameters = pika.ConnectionParameters(
+            connector["config"]["connection"]["host"],
+            connector["config"]["connection"]["port"],
+            "/",
+            self.pika_credentials,
+        )
+        self.pika_connection = pika.BlockingConnection(self.pika_parameters)
         self.channel = self.pika_connection.channel()
         self.channel.basic_qos(prefetch_count=1)
+        self.processing_count = 0
 
     def get_id(self):
         if hasattr(self, "_thread_id"):
@@ -46,6 +56,18 @@ class Consumer(threading.Thread):
         if res > 1:
             ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
             logging.info("Unable to kill the thread")
+
+    def nack_message(self, channel, delivery_tag):
+        if channel.is_open:
+            logging.info("Message (delivery_tag=" + str(delivery_tag) + ") rejected")
+            channel.basic_nack(delivery_tag)
+        else:
+            logging.info(
+                "Message (delivery_tag="
+                + str(delivery_tag)
+                + ") NOT rejected (channel closed)"
+            )
+            pass
 
     def ack_message(self, channel, delivery_tag):
         if channel.is_open:
@@ -85,98 +107,71 @@ class Consumer(threading.Thread):
 
     # Data handling
     def data_handler(self, connection, channel, delivery_tag, data):
-        job_id = data["job_id"]
-        token = None
-        if "token" in data:
-            token = data["token"]
+        # Set the API headers
+        applicant_id = data["applicant_id"]
+        self.api.set_applicant_id_header(applicant_id)
+        work_id = data["work_id"] if "work_id" in data else None
+        # Execute the import
+        self.processing_count += 1
+        content = "Unparseable"
         try:
             content = base64.b64decode(data["content"]).decode("utf-8")
-            types = data["entities_types"] if "entities_types" in data else []
-            update = data["update"] if "update" in data else False
-            if token:
-                self.api.set_token(token)
-            imported_data = self.api.stix2.import_bundle_from_json(
-                content, update, types
+            types = (
+                data["entities_types"]
+                if "entities_types" in data and len(data["entities_types"]) > 0
+                else None
             )
-            self.api.set_token(self.opencti_token)
-            if job_id is not None:
-                messages = []
-                by_types = groupby(imported_data, key=lambda x: x["type"])
-                for key, grp in by_types:
-                    messages.append(str(len(list(grp))) + " imported " + key)
-                self.api.job.update_job(job_id, "complete", messages)
+            update = data["update"] if "update" in data else False
+            processing_count = self.processing_count
+            if self.processing_count == PROCESSING_COUNT:
+                processing_count = None
+            self.api.stix2.import_bundle_from_json(
+                content, update, types, processing_count
+            )
+            # Ack the message
             cb = functools.partial(self.ack_message, channel, delivery_tag)
             connection.add_callback_threadsafe(cb)
+            if work_id is not None:
+                self.api.work.report_expectation(work_id, None)
+            self.processing_count = 0
             return True
         except RequestException as re:
             logging.error("A connection error occurred: { " + str(re) + " }")
+            time.sleep(60)
             logging.info(
                 "Message (delivery_tag=" + str(delivery_tag) + ") NOT acknowledged"
             )
-            cb = functools.partial(self.stop_consume, channel)
+            cb = functools.partial(self.nack_message, channel, delivery_tag)
             connection.add_callback_threadsafe(cb)
+            self.processing_count = 0
             return False
-        except Exception as e:
-            logging.error("An unexpected error occurred: { " + str(e) + " }")
-            cb = functools.partial(self.ack_message, channel, delivery_tag)
-            connection.add_callback_threadsafe(cb)
-            if job_id is not None:
-                self.api.job.update_job(job_id, "error", [str(e)])
-            return False
-
-    def run(self):
-        try:
-            # Consume the queue
-            logging.info("Thread for queue " + self.queue_name + " started")
-            self.channel.basic_consume(
-                queue=self.queue_name, on_message_callback=self._process_message
-            )
-            self.channel.start_consuming()
-        finally:
-            self.channel.stop_consuming()
-            logging.info("Thread for queue " + self.queue_name + " terminated")
-
-
-class Logger(threading.Thread):
-    def __init__(self, config):
-        threading.Thread.__init__(self)
-        self.config = config
-        self.queue_name = "logs_all"
-        self.pika_connection = pika.BlockingConnection(
-            pika.URLParameters(config["rabbitmq_url"])
-        )
-        self.channel = self.pika_connection.channel()
-        self.elasticsearch = Elasticsearch([config["elasticsearch_url"]])
-        self.elasticsearch_index = config["elasticsearch_index"]
-
-    def get_id(self):
-        if hasattr(self, "_thread_id"):
-            return self._thread_id
-        for id, thread in threading._active.items():
-            if thread is self:
-                return id
-
-    def terminate(self):
-        thread_id = self.get_id()
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            thread_id, ctypes.py_object(SystemExit)
-        )
-        if res > 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
-            logging.info("Unable to kill the thread")
-
-    def stop_consume(self, channel):
-        if channel.is_open:
-            channel.stop_consuming()
-
-    # Callable for consuming a message
-    def _process_message(self, channel, method, properties, body):
-        data = json.loads(body)
-        data["internal_id_key"] = uuid.uuid4()
-        self.elasticsearch.index(
-            index=self.elasticsearch_index, id=data["internal_id_key"], body=data
-        )
-        channel.basic_ack(method.delivery_tag)
+        except Exception as ex:
+            error = str(ex)
+            if (
+                "UnsupportedError" not in error
+                and self.processing_count < PROCESSING_COUNT
+            ):
+                # Sleep between 1 and 3 secs before retrying
+                sleep_jitter = round(random.uniform(1, 3), 2)
+                time.sleep(sleep_jitter)
+                logging.info(
+                    "Message (delivery_tag="
+                    + str(delivery_tag)
+                    + ") reprocess (retry nb: "
+                    + str(self.processing_count)
+                    + ")"
+                )
+                self.data_handler(connection, channel, delivery_tag, data)
+            else:
+                logging.error(str(ex))
+                self.processing_count = 0
+                cb = functools.partial(self.ack_message, channel, delivery_tag)
+                connection.add_callback_threadsafe(cb)
+                if work_id is not None:
+                    self.api.work.report_expectation(
+                        work_id, {"error": str(ex), "source": content}
+                    )
+                return False
 
     def run(self):
         try:
@@ -209,16 +204,15 @@ class Worker:
         self.opencti_token = os.getenv("OPENCTI_TOKEN") or config["opencti"]["token"]
 
         # Check if openCTI is available
-        self.api = OpenCTIApiClient(self.opencti_url, self.opencti_token)
+        self.api = OpenCTIApiClient(
+            self.opencti_url, self.opencti_token, self.log_level
+        )
 
         # Configure logger
         numeric_level = getattr(logging, self.log_level.upper(), None)
         if not isinstance(numeric_level, int):
             raise ValueError("Invalid log level: " + self.log_level)
         logging.basicConfig(level=numeric_level)
-
-        # Get logger config
-        self.logger_config = self.api.get_logs_worker_config()
 
         # Initialize variables
         self.connectors = []
@@ -243,31 +237,18 @@ class Worker:
                                 + " not alive, creating a new one..."
                             )
                             self.consumer_threads[queue] = Consumer(
-                                connector, self.opencti_url, self.opencti_token
+                                connector,
+                                self.opencti_url,
+                                self.opencti_token,
                             )
                             self.consumer_threads[queue].start()
                     else:
                         self.consumer_threads[queue] = Consumer(
-                            connector, self.opencti_url, self.opencti_token
+                            connector,
+                            self.opencti_url,
+                            self.opencti_token,
                         )
                         self.consumer_threads[queue].start()
-                # Check logs queue is consumed
-                if self.logs_all_queue in self.logger_threads:
-                    if not self.logger_threads[self.logs_all_queue].is_alive():
-                        logging.info(
-                            "Thread for queue "
-                            + self.logs_all_queue
-                            + " not alive, creating a new one..."
-                        )
-                        self.logger_threads[self.logs_all_queue] = Logger(
-                            self.logger_config
-                        )
-                        self.logger_threads[self.logs_all_queue].start()
-                else:
-                    self.logger_threads[self.logs_all_queue] = Logger(
-                        self.logger_config
-                    )
-                    self.logger_threads[self.logs_all_queue].start()
 
                 # Check if some threads must be stopped
                 for thread in list(self.consumer_threads):

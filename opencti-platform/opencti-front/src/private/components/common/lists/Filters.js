@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import {
-  compose, pathOr, pipe, map, union,
+  compose, pathOr, pipe, map, union, filter, includes,
 } from 'ramda';
 import { withStyles } from '@material-ui/core/styles';
 import Grid from '@material-ui/core/Grid';
@@ -14,7 +14,10 @@ import * as PropTypes from 'prop-types';
 import { fetchQuery } from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
 import { identityCreationIdentitiesSearchQuery } from '../identities/IdentityCreation';
-import { tagsSearchQuery } from '../../settings/Tags';
+// TODO @SAM Fix cyclic redundancies
+// eslint-disable-next-line import/no-cycle
+import { labelsSearchQuery } from '../../settings/Labels';
+// eslint-disable-next-line import/no-cycle
 import { attributesSearchQuery } from '../../settings/Attributes';
 import { markingDefinitionsLinesSearchQuery } from '../../settings/marking_definitions/MarkingDefinitionsLines';
 import ItemIcon from '../../../../components/ItemIcon';
@@ -38,7 +41,14 @@ const styles = (theme) => ({
     flexGrow: 1,
     marginLeft: 10,
   },
+  autocomplete: {
+    float: 'left',
+    margin: '5px 10px 0 10px',
+    width: 200,
+  },
 });
+
+const directFilters = ['report_types'];
 
 class Filters extends Component {
   constructor(props) {
@@ -62,46 +72,6 @@ class Filters extends Component {
   searchEntities(filterKey, event) {
     const { t } = this.props;
     switch (filterKey) {
-      case 'tags':
-        fetchQuery(tagsSearchQuery, {
-          search: event && event.target.value !== 0 ? event.target.value : '',
-          first: 10,
-        }).then((data) => {
-          const entities = pipe(
-            pathOr([], ['tags', 'edges']),
-            map((n) => ({
-              label: n.node.value,
-              value: n.node.id,
-              type: 'tag',
-              color: n.node.color,
-            })),
-          )(data);
-          this.setState({
-            entities: { tags: union(this.state.entities, entities) },
-          });
-        });
-        break;
-      case 'markingDefinitions':
-        fetchQuery(markingDefinitionsLinesSearchQuery, {
-          search: event && event.target.value !== 0 ? event.target.value : '',
-          first: 10,
-        }).then((data) => {
-          const entities = pipe(
-            pathOr([], ['markingDefinitions', 'edges']),
-            map((n) => ({
-              label: n.node.definition,
-              value: n.node.id,
-              type: 'marking-definition',
-              color: n.node.color,
-            })),
-          )(data);
-          this.setState({
-            entities: {
-              markingDefinitions: union(this.state.entities, entities),
-            },
-          });
-        });
-        break;
       case 'createdBy':
         fetchQuery(identityCreationIdentitiesSearchQuery, {
           types: ['User', 'Organization'],
@@ -121,10 +91,50 @@ class Filters extends Component {
           });
         });
         break;
-      case 'base_score_gt':
+      case 'markedBy':
+        fetchQuery(markingDefinitionsLinesSearchQuery, {
+          search: event && event.target.value !== 0 ? event.target.value : '',
+          first: 10,
+        }).then((data) => {
+          const entities = pipe(
+            pathOr([], ['markingDefinitions', 'edges']),
+            map((n) => ({
+              label: n.node.definition,
+              value: n.node.id,
+              type: 'Marking-Definition',
+              color: n.node.x_opencti_color,
+            })),
+          )(data);
+          this.setState({
+            entities: {
+              markedBy: union(this.state.entities, entities),
+            },
+          });
+        });
+        break;
+      case 'labelledBy':
+        fetchQuery(labelsSearchQuery, {
+          search: event && event.target.value !== 0 ? event.target.value : '',
+          first: 10,
+        }).then((data) => {
+          const entities = pipe(
+            pathOr([], ['labels', 'edges']),
+            map((n) => ({
+              label: n.node.value,
+              value: n.node.id,
+              type: 'Label',
+              color: n.node.color,
+            })),
+          )(data);
+          this.setState({
+            entities: { labelledBy: union(this.state.entities, entities) },
+          });
+        });
+        break;
+      case 'x_opencti_base_score_gt':
         this.setState({
           entities: {
-            base_score_gt: union(
+            x_opencti_base_score_gt: union(
               this.state.entities,
               pipe(
                 map((n) => ({
@@ -137,9 +147,25 @@ class Filters extends Component {
           },
         });
         break;
-      case 'base_severity':
+      case 'confidence_gt':
+        this.setState({
+          entities: {
+            confidence_gt: union(
+              this.state.entities,
+              pipe(
+                map((n) => ({
+                  label: t(`confidence_${n.toString()}`),
+                  value: n,
+                  type: 'attribute',
+                })),
+              )(['0', '15', '50', '75', '85']),
+            ),
+          },
+        });
+        break;
+      case 'x_opencti_base_severity':
         fetchQuery(attributesSearchQuery, {
-          type: 'base_severity',
+          type: 'x_opencti_base_severity',
           search: event && event.target.value !== 0 ? event.target.value : '',
           first: 10,
         }).then((data) => {
@@ -152,13 +178,15 @@ class Filters extends Component {
             })),
           )(data);
           this.setState({
-            entities: { base_severity: union(this.state.entities, entities) },
+            entities: {
+              x_opencti_base_severity: union(this.state.entities, entities),
+            },
           });
         });
         break;
-      case 'attack_vector':
+      case 'x_opencti_attack_vector':
         fetchQuery(attributesSearchQuery, {
-          type: 'attack_vector',
+          type: 'x_opencti_attack_vector',
           search: event && event.target.value !== 0 ? event.target.value : '',
           first: 10,
         }).then((data) => {
@@ -171,13 +199,15 @@ class Filters extends Component {
             })),
           )(data);
           this.setState({
-            entities: { attack_vector: union(this.state.entities, entities) },
+            entities: {
+              x_opencti_attack_vector: union(this.state.entities, entities),
+            },
           });
         });
         break;
-      case 'object_status':
+      case 'x_opencti_report_status':
         fetchQuery(attributesSearchQuery, {
-          type: 'object_status',
+          type: 'x_opencti_report_status',
           search: event && event.target.value !== 0 ? event.target.value : '',
           first: 10,
         }).then((data) => {
@@ -190,7 +220,30 @@ class Filters extends Component {
             })),
           )(data);
           this.setState({
-            entities: { object_status: union(this.state.entities, entities) },
+            entities: {
+              x_opencti_report_status: union(this.state.entities, entities),
+            },
+          });
+        });
+        break;
+      case 'report_types':
+        fetchQuery(attributesSearchQuery, {
+          key: 'report_types',
+          search: event && event.target.value !== 0 ? event.target.value : '',
+          first: 10,
+        }).then((data) => {
+          const entities = pipe(
+            pathOr([], ['attributes', 'edges']),
+            map((n) => ({
+              label: t(n.node.value),
+              value: n.node.value,
+              type: 'attribute',
+            })),
+          )(data);
+          this.setState({
+            entities: {
+              report_types: union(this.state.entities, entities),
+            },
           });
         });
         break;
@@ -200,7 +253,9 @@ class Filters extends Component {
   }
 
   handleChange(filterKey, event, value) {
-    this.props.handleAddFilter(filterKey, value.value, value.label, event);
+    if (value) {
+      this.props.handleAddFilter(filterKey, value.value, value.label, event);
+    }
   }
 
   handleChangeDate(filterKey, date, value) {
@@ -216,7 +271,11 @@ class Filters extends Component {
     const { open, anchorEl, entities } = this.state;
     return (
       <div className={classes.filters}>
-        <IconButton color="primary" onClick={this.handleOpenFilters.bind(this)}>
+        <IconButton
+          color="primary"
+          onClick={this.handleOpenFilters.bind(this)}
+          style={{ float: 'left' }}
+        >
           <FilterListOutlined />
         </IconButton>
         <Popover
@@ -234,7 +293,10 @@ class Filters extends Component {
           }}
         >
           <Grid container={true} spacing={2}>
-            {availableFilterKeys.map((filterKey) => {
+            {filter(
+              (n) => !includes(n, directFilters),
+              availableFilterKeys,
+            ).map((filterKey) => {
               const currentValue = currentFilters[filterKey]
                 ? currentFilters[filterKey][0]
                 : null;
@@ -262,9 +324,8 @@ class Filters extends Component {
               return (
                 <Grid key={filterKey} item={true} xs={6}>
                   <Autocomplete
-                    className={classes.autocomplete}
                     selectOnFocus={true}
-                    autoSelect={true}
+                    autoSelect={false}
                     autoHighlight={true}
                     getOptionLabel={(option) => (option.label ? option.label : '')
                     }
@@ -272,8 +333,8 @@ class Filters extends Component {
                     options={entities[filterKey] ? entities[filterKey] : []}
                     onInputChange={this.searchEntities.bind(this, filterKey)}
                     onChange={this.handleChange.bind(this, filterKey)}
-                    value={currentValue ? currentValue.value : null}
-                    getOptionSelected={(option, value) => option.value === value}
+                    getOptionSelected={(option, value) => option.value === value
+                    }
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -301,6 +362,42 @@ class Filters extends Component {
             })}
           </Grid>
         </Popover>
+        {filter((n) => includes(n, directFilters), availableFilterKeys).map(
+          (filterKey) => (
+            <Autocomplete
+              key={filterKey}
+              className={classes.autocomplete}
+              selectOnFocus={true}
+              autoSelect={false}
+              autoHighlight={true}
+              getOptionLabel={(option) => (option.label ? option.label : '')}
+              noOptionsText={t('No available options')}
+              options={entities[filterKey] ? entities[filterKey] : []}
+              onInputChange={this.searchEntities.bind(this, filterKey)}
+              onChange={this.handleChange.bind(this, filterKey)}
+              getOptionSelected={(option, value) => option.value === value}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t(`filter_${filterKey}`)}
+                  variant="outlined"
+                  size="small"
+                  fullWidth={true}
+                  onFocus={this.searchEntities.bind(this, filterKey)}
+                />
+              )}
+              renderOption={(option) => (
+                <React.Fragment>
+                  <div className={classes.icon} style={{ color: option.color }}>
+                    <ItemIcon type={option.type} />
+                  </div>
+                  <div className={classes.text}>{option.label}</div>
+                </React.Fragment>
+              )}
+            />
+          ),
+        )}
+        <div className="clearfix" />
       </div>
     );
   }

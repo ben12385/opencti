@@ -19,9 +19,10 @@ import inject18n from '../../../../components/i18n';
 import { commitMutation } from '../../../../relay/environment';
 import TextField from '../../../../components/TextField';
 import SelectField from '../../../../components/SelectField';
-import CreatedByRefField from '../../common/form/CreatedByRefField';
-import TagsField from '../../common/form/TagsField';
-import MarkingDefinitionsField from '../../common/form/MarkingDefinitionsField';
+import CreatedByField from '../../common/form/CreatedByField';
+import ObjectLabelField from '../../common/form/ObjectLabelField';
+import ObjectMarkingField from '../../common/form/ObjectMarkingField';
+import MarkDownField from '../../../../components/MarkDownField';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -80,8 +81,10 @@ const organizationValidation = (t) => Yup.object().shape({
     .min(3, t('The value is too short'))
     .max(5000, t('The value is too long'))
     .required(t('This field is required')),
-  organization_class: Yup.string().required(t('This field is required')),
-  reliability: Yup.string().required(t('This field is required')),
+  x_opencti_organization_type: Yup.string().required(
+    t('This field is required'),
+  ),
+  x_opencti_reliability: Yup.string().required(t('This field is required')),
 });
 
 const sharedUpdater = (store, userId, paginationOptions, newEdge) => {
@@ -110,9 +113,9 @@ class OrganizationCreation extends Component {
 
   onSubmit(values, { setSubmitting, resetForm }) {
     const finalValues = pipe(
-      assoc('createdByRef', values.createdByRef.value),
-      assoc('markingDefinitions', pluck('value', values.markingDefinitions)),
-      assoc('tags', pluck('value', values.tags)),
+      assoc('createdBy', values.createdBy.value),
+      assoc('objectMarking', pluck('value', values.objectMarking)),
+      assoc('objectLabel', pluck('value', values.objectLabel)),
     )(values);
     commitMutation({
       mutation: organizationMutation,
@@ -176,11 +179,11 @@ class OrganizationCreation extends Component {
               initialValues={{
                 name: '',
                 description: '',
-                reliability: '',
-                organization_class: 'other',
-                createdByRef: '',
-                markingDefinitions: [],
-                tags: [],
+                x_opencti_reliability: '',
+                x_opencti_organization_type: 'other',
+                createdBy: '',
+                objectMarking: [],
+                objectLabel: [],
               }}
               validationSchema={organizationValidation(t)}
               onSubmit={this.onSubmit.bind(this)}
@@ -202,7 +205,7 @@ class OrganizationCreation extends Component {
                     detectDuplicate={['Organization']}
                   />
                   <Field
-                    component={TextField}
+                    component={MarkDownField}
                     name="description"
                     label={t('Description')}
                     fullWidth={true}
@@ -212,7 +215,7 @@ class OrganizationCreation extends Component {
                   />
                   <Field
                     component={SelectField}
-                    name="organization_class"
+                    name="x_opencti_organization_type"
                     label={t('Organization type')}
                     fullWidth={true}
                     containerstyle={{ marginTop: 20, width: '100%' }}
@@ -225,7 +228,7 @@ class OrganizationCreation extends Component {
                   </Field>
                   <Field
                     component={SelectField}
-                    name="reliability"
+                    name="x_opencti_reliability"
                     label={t('Reliability')}
                     fullWidth={true}
                     containerstyle={{ marginTop: 20, width: '100%' }}
@@ -237,19 +240,19 @@ class OrganizationCreation extends Component {
                     <MenuItem value="E">{t('reliability_E')}</MenuItem>
                     <MenuItem value="F">{t('reliability_F')}</MenuItem>
                   </Field>
-                  <CreatedByRefField
-                    name="createdByRef"
+                  <CreatedByField
+                    name="createdBy"
                     style={{ marginTop: 20, width: '100%' }}
                     setFieldValue={setFieldValue}
                   />
-                  <TagsField
-                    name="tags"
+                  <ObjectLabelField
+                    name="objectLabel"
                     style={{ marginTop: 20, width: '100%' }}
                     setFieldValue={setFieldValue}
-                    values={values.tags}
+                    values={values.objectLabel}
                   />
-                  <MarkingDefinitionsField
-                    name="markingDefinitions"
+                  <ObjectMarkingField
+                    name="objectMarking"
                     style={{ marginTop: 20, width: '100%' }}
                   />
                   <div className={classes.buttons}>

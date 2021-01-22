@@ -1,34 +1,42 @@
 import amqp from 'amqplib';
 import axios from 'axios';
-import { add, divide, filter, includes, map, pipe, reduce } from 'ramda';
-import { v4 as uuid } from 'uuid';
+import * as R from 'ramda';
 import conf from '../config/conf';
-import { generateLogMessage, utcDate } from './utils';
-import { convertDataToStix } from './stix';
 import { DatabaseError } from '../config/errors';
 
 export const CONNECTOR_EXCHANGE = 'amqp.connector.exchange';
 export const WORKER_EXCHANGE = 'amqp.worker.exchange';
-export const LOGS_EXCHANGE = 'amqp.logs.exchange';
 
 export const EVENT_TYPE_CREATE = 'create';
 export const EVENT_TYPE_UPDATE = 'update';
-export const EVENT_TYPE_UPDATE_ADD = 'update_add';
-export const EVENT_TYPE_UPDATE_REMOVE = 'update_remove';
+export const EVENT_TYPE_MERGE = 'merge';
 export const EVENT_TYPE_DELETE = 'delete';
 
-export const amqpUri = () => {
-  const user = conf.get('rabbitmq:username');
-  const pass = conf.get('rabbitmq:password');
+const amqpUri = () => {
   const host = conf.get('rabbitmq:hostname');
   const port = conf.get('rabbitmq:port');
-  return `amqp://${user}:${pass}@${host}:${port}`;
+  return `amqp://${host}:${port}`;
+};
+
+const amqpCred = () => {
+  const user = conf.get('rabbitmq:username');
+  const pass = conf.get('rabbitmq:password');
+  return { credentials: amqp.credentials.plain(user, pass) };
+};
+
+export const config = () => {
+  return {
+    host: conf.get('rabbitmq:hostname'),
+    port: conf.get('rabbitmq:port'),
+    user: conf.get('rabbitmq:username'),
+    pass: conf.get('rabbitmq:password'),
+  };
 };
 
 const amqpExecute = (execute) => {
   return new Promise((resolve, reject) => {
     amqp
-      .connect(amqpUri())
+      .connect(amqpUri(), amqpCred())
       .then((connection) => {
         return connection
           .createConfirmChannel()
@@ -57,7 +65,7 @@ export const send = (exchangeName, routingKey, message) => {
           exchangeName,
           routingKey,
           Buffer.from(message),
-          {}, // No option
+          { deliveryMode: 2 }, // Make message persistent
           (err, ok) => {
             if (err) reject(err);
             resolve(ok);
@@ -96,23 +104,13 @@ export const metrics = async () => {
       return response.data;
     });
   // Compute number of push queues
-  const pushQueues = filter((q) => includes('push_', q.name), queues);
-  const nbPushQueues = pushQueues.length;
-  const nbConsumers = pipe(
-    map((q) => q.consumers),
-    reduce(add, 0)
-  )(pushQueues);
-  let finalCount = 0;
-  /* istanbul ignore if */
-  if (nbConsumers > 0 && nbPushQueues > 0) {
-    // Because worker connect to every queue.
-    finalCount = divide(nbConsumers, nbPushQueues);
-  }
-  return { overview, consumers: Math.round(finalCount), queues };
+  const pushQueues = R.filter((q) => R.includes('push_', q.name) && q.consumers > 0, queues);
+  const consumers = R.head(pushQueues) ? R.head(pushQueues).consumers : 0;
+  return { overview, consumers, queues };
 };
 
 export const connectorConfig = (id) => ({
-  uri: amqpUri(),
+  connection: config(),
   push: `push_${id}`,
   push_exchange: 'amqp.worker.exchange',
   listen: `listen_${id}`,
@@ -167,10 +165,10 @@ export const unregisterConnector = async (id) => {
   return { listen, push };
 };
 
-export const ensureRabbitMQAndLogsQueue = async () => {
+export const rabbitMQIsAlive = async () => {
   // 01. Ensure exchange exists
   await amqpExecute((channel) =>
-    channel.assertExchange(LOGS_EXCHANGE, 'topic', {
+    channel.assertExchange(CONNECTOR_EXCHANGE, 'direct', {
       durable: true,
     })
   ).catch(
@@ -178,53 +176,14 @@ export const ensureRabbitMQAndLogsQueue = async () => {
       throw DatabaseError('RabbitMQ seems down');
     }
   );
-  // 02. Ensure logs queue exists
-  const listenQueue = 'logs_all';
-  await amqpExecute((channel) =>
-    channel.assertQueue(listenQueue, {
-      exclusive: false,
-      durable: true,
-      autoDelete: false,
-      arguments: {
-        name: 'OpenCTI logs queue',
-      },
-    })
-  ).catch(
-    /* istanbul ignore next */ () => {
-      throw DatabaseError('RabbitMQ seems down');
-    }
-  );
-  // 03. bind queue for the each connector scope
-  // eslint-disable-next-line prettier/prettier
-  await amqpExecute((c) => c.bindQueue(listenQueue, LOGS_EXCHANGE, 'community.*'));
 };
 
 export const pushToConnector = (connector, message) => {
-  return send(CONNECTOR_EXCHANGE, listenRouting(connector.internal_id_key), JSON.stringify(message));
-};
-
-export const pushToLogs = (communityId, message) => {
-  return send(LOGS_EXCHANGE, `community.${communityId}`, JSON.stringify(message));
+  return send(CONNECTOR_EXCHANGE, listenRouting(connector.internal_id), JSON.stringify(message));
 };
 
 export const getRabbitMQVersion = () => {
   return metrics()
     .then((data) => data.overview.rabbitmq_version)
     .catch(/* istanbul ignore next */ () => 'Disconnected');
-};
-
-export const sendLog = async (eventType, eventUser, eventData, eventExtraData = null) => {
-  const finalEventData = await convertDataToStix(eventData, eventType, eventExtraData);
-  const message = {
-    event_type: eventType,
-    event_user: eventUser.id,
-    event_date: utcDate().toISOString(),
-    event_data: finalEventData,
-    event_message: generateLogMessage(eventType, eventUser, eventData, eventExtraData),
-  };
-  // TODO @Sam
-  // Here we need to parse the data and send to all declared communities that match the data
-  const communityId = uuid();
-  const communities = [communityId];
-  await Promise.all(communities.map((community) => pushToLogs(community, message)));
 };

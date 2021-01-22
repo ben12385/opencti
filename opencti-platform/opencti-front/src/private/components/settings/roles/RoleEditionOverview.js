@@ -17,6 +17,7 @@ import ListSubheader from '@material-ui/core/ListSubheader';
 import { commitMutation, QueryRenderer } from '../../../../relay/environment';
 import { SubscriptionFocus } from '../../../../components/Subscription';
 import TextField from '../../../../components/TextField';
+import MarkDownField from '../../../../components/MarkDownField';
 import inject18n from '../../../../components/i18n';
 import Loader from '../../../../components/Loader';
 import SwitchField from '../../../../components/SwitchField';
@@ -69,7 +70,7 @@ const roleEditionOverviewFocus = graphql`
 const roleEditionAddCapability = graphql`
   mutation RoleEditionOverviewAddCapabilityMutation(
     $id: ID!
-    $input: RelationAddInput!
+    $input: InternalRelationshipAddInput
   ) {
     roleEdit(id: $id) {
       relationAdd(input: $input) {
@@ -82,9 +83,13 @@ const roleEditionAddCapability = graphql`
 `;
 
 const roleEditionRemoveCapability = graphql`
-  mutation RoleEditionOverviewDelCapabilityMutation($id: ID!, $name: String!) {
+  mutation RoleEditionOverviewDelCapabilityMutation(
+    $id: ID!
+    $toId: String!
+    $relationship_type: String!
+  ) {
     roleEdit(id: $id) {
-      removeCapability(name: $name) {
+      relationDelete(toId: $toId, relationship_type: $relationship_type) {
         ...RoleEditionOverview_role
       }
     }
@@ -148,10 +153,8 @@ const RoleEditionOverviewComponent = ({
         variables: {
           id: roleId,
           input: {
-            fromRole: 'position',
             toId: capability.id,
-            toRole: 'capability',
-            through: 'role_capability',
+            relationship_type: 'has-capability',
           },
         },
       });
@@ -160,7 +163,8 @@ const RoleEditionOverviewComponent = ({
         mutation: roleEditionRemoveCapability,
         variables: {
           id: roleId,
-          name: capability.name,
+          toId: capability.id,
+          relationship_type: 'has-capability',
         },
       });
     }
@@ -187,7 +191,7 @@ const RoleEditionOverviewComponent = ({
               }
             />
             <Field
-              component={TextField}
+              component={MarkDownField}
               name="description"
               label={t('Description')}
               fullWidth={true}

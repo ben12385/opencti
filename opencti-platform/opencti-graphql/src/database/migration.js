@@ -1,10 +1,12 @@
-import { v4 as uuid } from 'uuid';
-import { filter, head, last, map } from 'ramda';
+import * as R from 'ramda';
 import { MigrationSet } from 'migrate';
 import Migration from 'migrate/lib/migration';
-import { executeWrite, find, load, internalDirectWrite } from './grakn';
 import { logger } from '../config/conf';
 import { DatabaseError } from '../config/errors';
+import { RELATION_MIGRATES } from '../schema/internalRelationship';
+import { ENTITY_TYPE_MIGRATION_REFERENCE, ENTITY_TYPE_MIGRATION_STATUS } from '../schema/internalObject';
+import { createEntity, createRelation, listThroughGetTo, loadEntity, patchAttribute } from './middleware';
+import { SYSTEM_USER } from '../domain/user';
 
 const normalizeMigrationName = (rawName) => {
   if (rawName.startsWith('./')) {
@@ -21,40 +23,31 @@ const retrieveMigrations = () => {
     .map((name) => {
       const title = normalizeMigrationName(name);
       const migration = webpackMigrationsContext(name);
-      return { title, up: migration.up, down: migration.down };
+      const [time] = title.split('-');
+      const timestamp = parseInt(time, 10);
+      return { title, up: migration.up, down: migration.down, timestamp };
     });
 };
 
-const graknStateStorage = {
+export const lastAvailableMigrationTime = () => {
+  const migrations = retrieveMigrations();
+  const lastMigration = R.last(migrations);
+  return lastMigration && lastMigration.timestamp;
+};
+
+const migrationStorage = {
   async load(fn) {
-    // Get current status of migrations in Grakn
-    const migration = await load(`match $status isa MigrationStatus; get;`, ['status'], {
-      noCache: true,
-    });
-    if (!migration) {
-      // If no migration found, initialize
-      logger.info('[MIGRATION] > Fresh platform detected, creating migration structure');
-      const lastExistingMigration = last(retrieveMigrations());
-      const [time] = lastExistingMigration.title.split('-');
-      const lastRunInit = `${parseInt(time, 10) + 1}-init`;
-      await internalDirectWrite(
-        `insert $x isa MigrationStatus, has lastRun "${lastRunInit}", has internal_id_key "${uuid()}";`
-      );
-      return fn(null, { lastRun: lastRunInit, migrations: [] });
-    }
-    // If migrations found, convert to current status
-    const migrations = await find(
-      `match $from isa MigrationStatus; $rel(status:$from, state:$to) isa migrate; get;`,
-      ['from', 'to'],
-      { noCache: true }
-    );
-    logger.info(`[MIGRATION] > Read ${migrations.length} migrations from the database`);
+    // Get current status of migrations
+    const migration = await loadEntity([ENTITY_TYPE_MIGRATION_STATUS]);
+    const migrationId = migration.internal_id;
+    const migrations = await listThroughGetTo(migrationId, RELATION_MIGRATES, ENTITY_TYPE_MIGRATION_REFERENCE);
+    logger.info(`[MIGRATION] Read ${migrations.length} migrations from the database`);
     const migrationStatus = {
-      lastRun: migration.status.lastRun,
-      migrations: map(
+      lastRun: migration.lastRun,
+      migrations: R.map(
         (record) => ({
-          title: record.to.title,
-          timestamp: record.to.timestamp,
+          title: record.title,
+          timestamp: record.timestamp,
         }),
         migrations
       ),
@@ -63,79 +56,64 @@ const graknStateStorage = {
   },
   async save(set, fn) {
     try {
-      await executeWrite(async (wTx) => {
-        // Get current done migration
-        const mig = head(filter((m) => m.title === set.lastRun, set.migrations));
-        // We have only one instance of migration status.
-        const q1 = `match $x isa MigrationStatus, has lastRun $run; delete $run;`;
-        logger.debug(`[MIGRATION] step 1`, { query: q1 });
-        await wTx.query(q1);
-        const q2 = `match $x isa MigrationStatus; insert $x has lastRun "${set.lastRun}";`;
-        logger.debug(`[MIGRATION] step 2`, { query: q2 });
-        await wTx.query(q2);
-        // Insert the migration reference
-        const q3 = `insert $x isa MigrationReference,
-          has internal_id_key "${uuid()}",
-          has title "${mig.title}",
-          has timestamp ${mig.timestamp};`;
-        logger.debug(`[MIGRATION] step 3`, { query: q3 });
-        // Attach the reference to the migration status.
-        await wTx.query(q3);
-        // Attach the reference to the migration status.
-        const q4 = `match $status isa MigrationStatus; 
-          $ref isa MigrationReference, has title "${mig.title}"; 
-          insert (status: $status, state: $ref) isa migrate, has internal_id_key "${uuid()}";`;
-        logger.debug(`[MIGRATION] step 4`, { query: q4 });
-        await wTx.query(q4);
-        logger.info(`[MIGRATION] > Saving current configuration, ${mig.title}`);
-      });
+      // Get current done migration
+      const mig = R.head(R.filter((m) => m.title === set.lastRun, set.migrations));
+      // Update the reference status to the last run
+      const migrationStatus = await loadEntity([ENTITY_TYPE_MIGRATION_STATUS]);
+      const statusPatch = { lastRun: set.lastRun };
+      await patchAttribute(SYSTEM_USER, migrationStatus.internal_id, ENTITY_TYPE_MIGRATION_STATUS, statusPatch);
+      // Insert the migration reference
+      const migrationRefInput = { title: mig.title, timestamp: mig.timestamp };
+      const migrationRef = await createEntity(SYSTEM_USER, migrationRefInput, ENTITY_TYPE_MIGRATION_REFERENCE);
+      // Attach the reference to the migration status.
+      const migrationRel = { fromId: migrationStatus.id, toId: migrationRef.id, relationship_type: RELATION_MIGRATES };
+      await createRelation(SYSTEM_USER, migrationRel);
+      logger.info(`[MIGRATION] Saving current configuration, ${mig.title}`);
       return fn();
     } catch (err) {
-      logger.error('[MIGRATION] > Error saving the migration state');
+      logger.error('[MIGRATION] Error saving the migration state');
       return fn();
     }
   },
 };
 
 const applyMigration = () => {
-  const set = new MigrationSet(graknStateStorage);
+  const set = new MigrationSet(migrationStorage);
   return new Promise((resolve, reject) => {
-    graknStateStorage.load((err, state) => {
-      if (err) throw DatabaseError('[OPENCT Error applying migration', err);
+    migrationStorage.load((err, state) => {
+      if (err) throw DatabaseError('[MIGRATION] Error applying migration', err);
       // Set last run date on the set
       set.lastRun = state.lastRun;
       // Read migrations from webpack
       const filesMigrationSet = retrieveMigrations();
       // Filter migration to apply. Should be > lastRun
-      const [platformTime] = state.lastRun.split('-');
-      const platformDate = new Date(parseInt(platformTime, 10));
-      const migrationToApply = filter((file) => {
-        const [time] = file.title.split('-');
-        const fileDate = new Date(parseInt(time, 10));
-        return fileDate > platformDate;
-      }, filesMigrationSet);
+      const [lastMigrationTime] = state.lastRun.split('-');
+      const lastMigrationDate = new Date(parseInt(lastMigrationTime, 10));
+      const migrationToApply = R.filter((file) => new Date(file.timestamp) > lastMigrationDate, filesMigrationSet);
       const alreadyAppliedMigrations = new Map(state.migrations ? state.migrations.map((i) => [i.title, i]) : null);
       /** Match the files migrations to the database migrations.
-       Plays migrations that doesnt have matching name / timestamp */
+       Plays migrations that does not have matching name / timestamp */
       if (migrationToApply.length > 0) {
-        logger.info(`[MIGRATION] > ${migrationToApply.length} migrations will be executed`);
+        logger.info(`[MIGRATION] ${migrationToApply.length} migrations will be executed`);
+      } else {
+        logger.info(`[MIGRATION] Platform already up to date, nothing to migrate`);
       }
       for (let index = 0; index < migrationToApply.length; index += 1) {
         const migSet = migrationToApply[index];
         const migration = new Migration(migSet.title, migSet.up, migSet.down);
         const stateMigration = alreadyAppliedMigrations.get(migration.title);
         if (stateMigration) {
-          logger.info(`[MIGRATION] > Replaying migration ${migration.title}`);
+          logger.info(`[MIGRATION] Replaying migration ${migration.title}`);
         }
         set.addMigration(migration);
       }
       // Start the set migration
       set.up((migrationError) => {
         if (migrationError) {
-          logger.error('[GRAKN] Error during migration');
+          logger.error('[MIGRATION] Error during migration');
           reject(migrationError);
         }
-        logger.info('[MIGRATION] > Migration process completed, platform is up to date');
+        logger.info('[MIGRATION] Migration process completed');
         resolve();
       });
     });

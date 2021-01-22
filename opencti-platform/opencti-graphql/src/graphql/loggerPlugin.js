@@ -1,7 +1,9 @@
-import { filter, head, isEmpty, isNil, includes } from 'ramda';
+import { dissoc, filter, head, includes, isEmpty, isNil } from 'ramda';
 import { stripIgnoredCharacters } from 'graphql';
 import nconf from 'nconf';
 import { logger } from '../config/conf';
+import { isNotEmptyField } from '../database/utils';
+import { getMemoryStatistics } from '../domain/settings';
 
 const innerCompute = (inners) => {
   return filter((i) => !isNil(i) && !isEmpty(i), inners).length;
@@ -25,6 +27,7 @@ const tryResolveKeyPromises = async (data) => {
   }
 };
 
+const API_CALL_MESSAGE = 'API Call'; // If you touch this, you need to change the performance agent
 const perfLog = nconf.get('app:performance_logger') || false;
 export default {
   requestDidStart: /* istanbul ignore next */ () => {
@@ -39,6 +42,8 @@ export default {
         const elapsed = stop - start;
         const size = Buffer.byteLength(JSON.stringify(context.request.variables));
         const isWrite = context.operation && context.operation.operation === 'mutation';
+        const contextUser = context.context.user;
+        const origin = contextUser ? contextUser.origin : undefined;
         const [variables] = await tryResolveKeyPromises(context.request.variables);
         const isCallError = context.errors && context.errors.length > 0;
         // Compute inner relations
@@ -46,9 +51,9 @@ export default {
         if (isWrite) {
           const { input } = context.request.variables;
           if (input) {
-            if (!isNil(input.createdByRef) && !isEmpty(input.createdByRef)) innerRelationCount += 1;
+            if (!isNil(input.createdBy) && !isEmpty(input.createdBy)) innerRelationCount += 1;
             if (!isNil(input.markingDefinitions)) innerRelationCount += innerCompute(input.markingDefinitions);
-            if (!isNil(input.tags)) innerRelationCount += innerCompute(input.tags);
+            if (!isNil(input.labels)) innerRelationCount += innerCompute(input.labels);
             if (!isNil(input.killChainPhases)) innerRelationCount += innerCompute(input.killChainPhases);
             if (!isNil(input.objectRefs)) innerRelationCount += innerCompute(input.objectRefs);
             if (!isNil(input.observableRefs)) innerRelationCount += innerCompute(input.observableRefs);
@@ -57,6 +62,7 @@ export default {
         }
         const operationType = `${isWrite ? 'WRITE' : 'READ'}`;
         const callMetaData = {
+          user: origin,
           type: operationType + (isCallError ? '_ERROR' : ''),
           operation_query: stripIgnoredCharacters(context.request.query),
           inner_relation_creation: innerRelationCount,
@@ -70,13 +76,18 @@ export default {
           const callError = currentError.originalError ? currentError.originalError : currentError;
           const { data, path, stack } = callError;
           const error = { data, path, stacktrace: stack.split('\n').map((line) => line.trim()) };
-          if (includes(callError.name, ['AuthRequired', 'AuthFailure', 'ForbiddenAccess'])) {
-            logger.warn('API Call', Object.assign(callMetaData, { error }));
+          const isRetryableCall = isNotEmptyField(origin?.call_retry_number);
+          const isAuthenticationCall = includes(callError.name, ['AuthRequired', 'AuthFailure', 'ForbiddenAccess']);
+          // Authentication problem can be logged in warning (dissoc variables to hide password)
+          // If worker is still retrying, this is not yet a problem, can be logged in warning until then.
+          if (isRetryableCall || isAuthenticationCall) {
+            logger.warn(API_CALL_MESSAGE, { ...dissoc('variables', callMetaData), error });
           } else {
-            logger.error('API Call', Object.assign(callMetaData, { error }));
+            // Every other uses cases are logged with error level
+            logger.error(API_CALL_MESSAGE, { ...callMetaData, error });
           }
         } else if (perfLog) {
-          logger.info('API Call', callMetaData);
+          logger.info(API_CALL_MESSAGE, { ...callMetaData, memory: getMemoryStatistics() });
         }
       },
     };

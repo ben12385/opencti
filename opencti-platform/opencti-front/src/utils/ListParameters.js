@@ -7,6 +7,7 @@ import {
   map,
   head,
   last,
+  assoc,
 } from 'ramda';
 
 export const saveViewParameters = (
@@ -16,7 +17,7 @@ export const saveViewParameters = (
   params,
 ) => {
   localStorage.setItem(localStorageKey, JSON.stringify(params));
-  const urlParams = pipe(
+  let urlParams = pipe(
     dissoc('view'),
     dissoc('types'),
     dissoc('openExports'),
@@ -24,8 +25,10 @@ export const saveViewParameters = (
     dissoc('selectedElements'),
     dissoc('lastSeenStart'),
     dissoc('lastSeenStop'),
-    dissoc('inferred'),
   )(params);
+  if (params.filters) {
+    urlParams = assoc('filters', JSON.stringify(params.filters), urlParams);
+  }
   history.replace(
     `${location.pathname}?${new URLSearchParams(urlParams).toString()}`,
   );
@@ -39,7 +42,10 @@ export const buildViewParamsFromUrlAndStorage = (
 ) => {
   const queryParams = [
     ...new URLSearchParams(location.search).entries(),
-  ].reduce((q, [k, v]) => Object.assign(q, { [k]: v }), {});
+  ].reduce(
+    (q, [k, v]) => Object.assign(q, { [k]: v === 'null' ? null : v }),
+    {},
+  );
   let finalParams = queryParams;
   if (localStorage.getItem(localStorageKey)) {
     const localParams = JSON.parse(localStorage.getItem(localStorageKey));
@@ -48,16 +54,16 @@ export const buildViewParamsFromUrlAndStorage = (
   if (finalParams.orderAsc) {
     finalParams.orderAsc = finalParams.orderAsc.toString() === 'true';
   }
-  if (typeof finalParams.stixDomainEntitiesTypes === 'string') {
-    finalParams.stixDomainEntitiesTypes = finalParams.stixDomainEntitiesTypes
-      ? (finalParams.stixDomainEntitiesTypes = split(
+  if (typeof finalParams.stixDomainObjectsTypes === 'string') {
+    finalParams.stixDomainObjectsTypes = finalParams.stixDomainObjectsTypes
+      ? (finalParams.stixDomainObjectsTypes = split(
         ',',
-        finalParams.stixDomainEntitiesTypes,
+        finalParams.stixDomainObjectsTypes,
       ))
       : [];
   }
   if (typeof finalParams.indicatorTypes === 'string') {
-    finalParams.indicatorTypes = finalParams.stixDomainEntitiesTypes
+    finalParams.indicatorTypes = finalParams.stixDomainObjectsTypes
       ? split(',', finalParams.indicatorTypes)
       : [];
   }
@@ -65,6 +71,11 @@ export const buildViewParamsFromUrlAndStorage = (
     finalParams.observableTypes = finalParams.observableTypes
       ? split(',', finalParams.observableTypes)
       : '';
+  }
+  if (typeof finalParams.filters === 'string') {
+    finalParams.filters = finalParams.filters
+      ? JSON.parse(finalParams.filters)
+      : {};
   }
   saveViewParameters(history, location, localStorageKey, finalParams);
   return finalParams;

@@ -59,7 +59,10 @@ class TopMenuRegion extends Component {
           <FlagOutlined className={classes.icon} fontSize="small" />
           {t('Regions')}
         </Button>
-        <ArrowForwardIosOutlined color="inherit" classes={{ root: classes.arrow }} />
+        <ArrowForwardIosOutlined
+          color="inherit"
+          classes={{ root: classes.arrow }}
+        />
         <Button
           component={Link}
           to={`/dashboard/entities/regions/${regionId}`}
@@ -102,45 +105,23 @@ class TopMenuRegion extends Component {
         </Button>
         <Button
           component={Link}
-          to={`/dashboard/entities/regions/${regionId}/reports`}
+          to={`/dashboard/entities/regions/${regionId}/analysis`}
           variant={
             location.pathname
-            === `/dashboard/entities/regions/${regionId}/reports`
+            === `/dashboard/entities/regions/${regionId}/analysis`
               ? 'contained'
               : 'text'
           }
           size="small"
           color={
             location.pathname
-            === `/dashboard/entities/regions/${regionId}/reports`
+            === `/dashboard/entities/regions/${regionId}/analysis`
               ? 'primary'
               : 'inherit'
           }
           classes={{ root: classes.button }}
         >
-          {t('Reports')}
-        </Button>
-        <Button
-          component={Link}
-          to={`/dashboard/entities/regions/${regionId}/observables`}
-          variant={
-            location.pathname.includes(
-              `/dashboard/entities/regions/${regionId}/observables`,
-            )
-              ? 'contained'
-              : 'text'
-          }
-          size="small"
-          color={
-            location.pathname.includes(
-              `/dashboard/entities/regions/${regionId}/observables`,
-            )
-              ? 'primary'
-              : 'inherit'
-          }
-          classes={{ root: classes.button }}
-        >
-          {t('Observables')}
+          {t('Analysis')}
         </Button>
         <Security needs={[KNOWLEDGE_KNUPLOAD, KNOWLEDGE_KNGETEXPORT]}>
           <Button

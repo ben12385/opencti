@@ -9,7 +9,7 @@ import { commitMutation, MESSAGING$ } from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
 
 const FileUploaderGlobalMutation = graphql`
-  mutation FileUploaderEntityMutation($file: Upload!) {
+  mutation FileUploaderGlobalMutation($file: Upload!) {
     uploadImport(file: $file) {
       ...FileLine_file
     }
@@ -17,8 +17,8 @@ const FileUploaderGlobalMutation = graphql`
 `;
 
 const FileUploaderEntityMutation = graphql`
-  mutation FileUploaderGlobalMutation($id: ID!, $file: Upload!) {
-    stixDomainEntityEdit(id: $id) {
+  mutation FileUploaderEntityMutation($id: ID!, $file: Upload!) {
+    stixDomainObjectEdit(id: $id) {
       importPush(file: $file) {
         ...FileLine_file
       }

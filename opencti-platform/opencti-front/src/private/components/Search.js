@@ -7,13 +7,13 @@ import Typography from '@material-ui/core/Typography';
 import { QueryRenderer } from '../../relay/environment';
 import inject18n from '../../components/i18n';
 import TopBar from './nav/TopBar';
-import LoaderWithParticles from '../../components/LoaderWithParticles';
-import StixDomainEntitiesLines, {
-  stixDomainEntitiesLinesQuery,
-} from './common/stix_domain_entities/StixDomainEntitiesLines';
-import StixObservableSearchLines, {
-  stixObservablesSearchLinesQuery,
-} from './signatures/stix_observables/StixObservablesSearchLines';
+import Loader from '../../components/Loader';
+import StixDomainObjectsLines, {
+  stixDomainObjectsLinesQuery,
+} from './common/stix_domain_objects/StixDomainObjectsLines';
+import StixCyberObservableSearchLines, {
+  stixCyberObservablesSearchLinesQuery,
+} from './observations/stix_cyber_observables/StixCyberObservablesSearchLines';
 
 const styles = () => ({
   linesContainer: {
@@ -48,31 +48,27 @@ class Search extends Component {
           {t('Search for an entity')}
         </Typography>
         <QueryRenderer
-          query={stixDomainEntitiesLinesQuery}
+          query={stixDomainObjectsLinesQuery}
           variables={{
             search: keyword,
             count: 100,
-            orderBy: 'created_at',
-            orderMode: 'desc',
           }}
           render={({ props }) => {
             if (props) {
-              return <StixDomainEntitiesLines data={props} />;
+              return <StixDomainObjectsLines data={props} />;
             }
-            return <LoaderWithParticles variant="inside" />;
+            return <Loader variant="inside" />;
           }}
         />
         <QueryRenderer
-          query={stixObservablesSearchLinesQuery}
+          query={stixCyberObservablesSearchLinesQuery}
           variables={{
             search: keyword,
             count: 100,
-            orderBy: 'created_at',
-            orderMode: 'desc',
           }}
           render={({ props }) => {
             if (props) {
-              return <StixObservableSearchLines data={props} />;
+              return <StixCyberObservableSearchLines data={props} />;
             }
             return <div />;
           }}

@@ -28,7 +28,7 @@ class ThreatActors extends Component {
     const params = buildViewParamsFromUrlAndStorage(
       props.history,
       props.location,
-      'view_threat-actors',
+      'view-threat_actors',
     );
     this.state = {
       sortBy: propOr('name', 'sortBy', params),
@@ -45,7 +45,7 @@ class ThreatActors extends Component {
     saveViewParameters(
       this.props.history,
       this.props.location,
-      'view_threat-actors',
+      'view-threat_actors',
       dissoc('filters', this.state),
     );
   }
@@ -97,9 +97,7 @@ class ThreatActors extends Component {
       name: {
         label: 'Name',
       },
-      tags: {
-        label: 'Tags',
-      },
+
       created: {
         label: 'Creation date',
       },
@@ -125,8 +123,8 @@ class ThreatActors extends Component {
         paginationOptions={paginationOptions}
         numberOfElements={numberOfElements}
         availableFilterKeys={[
-          'tags',
-          'markingDefinitions',
+          'labelledBy',
+          'markedBy',
           'created_start_date',
           'created_end_date',
           'createdBy',
@@ -140,7 +138,7 @@ class ThreatActors extends Component {
               data={props}
               paginationOptions={paginationOptions}
               initialLoading={props === null}
-              onTagClick={this.handleAddFilter.bind(this)}
+              onLabelClick={this.handleAddFilter.bind(this)}
               setNumberOfElements={this.setNumberOfElements.bind(this)}
             />
           )}
@@ -164,10 +162,10 @@ class ThreatActors extends Component {
         width: '35%',
         isSortable: true,
       },
-      tags: {
-        label: 'Tags',
+      objectLabel: {
+        label: 'Labels',
         width: '25%',
-        isSortable: true,
+        isSortable: false,
       },
       created: {
         label: 'Creation date',
@@ -198,7 +196,7 @@ class ThreatActors extends Component {
         paginationOptions={paginationOptions}
         numberOfElements={numberOfElements}
         availableFilterKeys={[
-          'tags',
+          'labels',
           'markingDefinitions',
           'created_start_date',
           'created_end_date',
@@ -214,7 +212,7 @@ class ThreatActors extends Component {
               paginationOptions={paginationOptions}
               dataColumns={dataColumns}
               initialLoading={props === null}
-              onTagClick={this.handleAddFilter.bind(this)}
+              onLabelClick={this.handleAddFilter.bind(this)}
               setNumberOfElements={this.setNumberOfElements.bind(this)}
             />
           )}

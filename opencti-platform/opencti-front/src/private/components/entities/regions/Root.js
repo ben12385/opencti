@@ -8,18 +8,17 @@ import {
 } from '../../../../relay/environment';
 import TopBar from '../../nav/TopBar';
 import Region from './Region';
-import RegionReports from './RegionReports';
 import RegionKnowledge from './RegionKnowledge';
-import RegionObservables from './RegionObservables';
-import StixDomainEntityHeader from '../../common/stix_domain_entities/StixDomainEntityHeader';
+import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
 import FileManager from '../../common/files/FileManager';
 import RegionPopover from './RegionPopover';
 import Loader from '../../../../components/Loader';
-import StixObjectHistory from '../../common/stix_object/StixObjectHistory';
+import StixCoreObjectHistory from '../../common/stix_core_objects/StixCoreObjectHistory';
+import StixCoreObjectOrStixCoreRelationshipContainers from '../../common/containers/StixCoreObjectOrStixCoreRelationshipContainers';
 
 const subscription = graphql`
   subscription RootRegionsSubscription($id: ID!) {
-    stixDomainEntity(id: $id) {
+    stixDomainObject(id: $id) {
       ... on Region {
         ...Region_region
         ...RegionEditionContainer_region
@@ -35,11 +34,9 @@ const regionQuery = graphql`
     region(id: $id) {
       id
       name
-      alias
+      x_opencti_aliases
       ...Region_region
-      ...RegionReports_region
       ...RegionKnowledge_region
-      ...RegionObservables_region
       ...FileImportViewer_entity
       ...FileExportViewer_entity
     }
@@ -93,13 +90,6 @@ class RootRegion extends Component {
                   />
                   <Route
                     exact
-                    path="/dashboard/entities/regions/:regionId/reports"
-                    render={(routeProps) => (
-                      <RegionReports {...routeProps} region={props.region} />
-                    )}
-                  />
-                  <Route
-                    exact
                     path="/dashboard/entities/regions/:regionId/knowledge"
                     render={() => (
                       <Redirect
@@ -114,12 +104,19 @@ class RootRegion extends Component {
                     )}
                   />
                   <Route
-                    path="/dashboard/entities/regions/:regionId/observables"
+                    exact
+                    path="/dashboard/entities/regions/:regionId/analysis"
                     render={(routeProps) => (
-                      <RegionObservables
-                        {...routeProps}
-                        region={props.region}
-                      />
+                      <React.Fragment>
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.region}
+                          PopoverComponent={<RegionPopover />}
+                        />
+                        <StixCoreObjectOrStixCoreRelationshipContainers
+                          {...routeProps}
+                          stixCoreObjectOrStixCoreRelationshipId={regionId}
+                        />
+                      </React.Fragment>
                     )}
                   />
                   <Route
@@ -127,13 +124,14 @@ class RootRegion extends Component {
                     path="/dashboard/entities/regions/:regionId/files"
                     render={(routeProps) => (
                       <React.Fragment>
-                        <StixDomainEntityHeader
-                          stixDomainEntity={props.region}
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.region}
                           PopoverComponent={<RegionPopover />}
                         />
                         <FileManager
                           {...routeProps}
                           id={regionId}
+                          connectorsImport={[]}
                           connectorsExport={props.connectorsForExport}
                           entity={props.region}
                         />
@@ -145,13 +143,13 @@ class RootRegion extends Component {
                     path="/dashboard/entities/regions/:regionId/history"
                     render={(routeProps) => (
                       <React.Fragment>
-                        <StixDomainEntityHeader
-                          stixDomainEntity={props.region}
+                        <StixDomainObjectHeader
+                          stixDomainObject={props.region}
                           PopoverComponent={<RegionPopover />}
                         />
-                        <StixObjectHistory
+                        <StixCoreObjectHistory
                           {...routeProps}
-                          entityId={regionId}
+                          stixCoreObjectId={regionId}
                         />
                       </React.Fragment>
                     )}

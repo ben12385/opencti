@@ -49,12 +49,8 @@ describe('Settings resolver standard behavior', () => {
     expect(queryResult).not.toBeNull();
     const { about } = queryResult.data;
     expect(about).not.toBeNull();
-    expect(about.version).toEqual('3.3.2');
-    expect(about.dependencies.length).toEqual(5);
-    const aggregationMap = new Map(about.dependencies.map((q) => [q.name, q]));
-    const grakn = aggregationMap.get('Grakn');
-    expect(grakn).not.toBeUndefined();
-    expect(grakn.version).toEqual('1.7.2');
+    expect(about.version).toContain('4.0');
+    expect(about.dependencies.length).toEqual(4);
   });
   it('should settings information', async () => {
     const queryResult = await queryAsAdmin({ query: READ_QUERY, variables: {} });

@@ -1,19 +1,57 @@
-import { head, includes, last, mapObjIndexed, pipe, values, join } from 'ramda';
+import * as R from 'ramda';
 import { offsetToCursor } from 'graphql-relay';
 import moment from 'moment';
+import { DatabaseError, FunctionalError } from '../config/errors';
+import { isInternalObject } from '../schema/internalObject';
+import { isStixMetaObject } from '../schema/stixMetaObject';
+import { isStixDomainObject } from '../schema/stixDomainObject';
+import {
+  ENTITY_AUTONOMOUS_SYSTEM,
+  ENTITY_DIRECTORY,
+  ENTITY_EMAIL_MESSAGE,
+  ENTITY_HASHED_OBSERVABLE_ARTIFACT,
+  ENTITY_HASHED_OBSERVABLE_STIX_FILE,
+  ENTITY_HASHED_OBSERVABLE_X509_CERTIFICATE,
+  ENTITY_MUTEX,
+  ENTITY_NETWORK_TRAFFIC,
+  ENTITY_PROCESS,
+  ENTITY_SOFTWARE,
+  ENTITY_USER_ACCOUNT,
+  ENTITY_WINDOWS_REGISTRY_KEY,
+  isStixCyberObservable,
+} from '../schema/stixCyberObservable';
+import { isInternalRelationship } from '../schema/internalRelationship';
+import { isStixCoreRelationship } from '../schema/stixCoreRelationship';
+import { isStixSightingRelationship } from '../schema/stixSightingRelationship';
+import { isStixCyberObservableRelationship } from '../schema/stixCyberObservableRelationship';
+import {
+  isStixInternalMetaRelationship,
+  isStixMetaRelationship,
+  RELATION_OBJECT_LABEL,
+} from '../schema/stixMetaRelationship';
+import { EVENT_TYPE_CREATE, EVENT_TYPE_DELETE, EVENT_TYPE_MERGE } from './rabbitmq';
+import { isStixObject } from '../schema/stixCoreObject';
 
-export const INDEX_STIX_OBSERVABLE = 'stix_observables';
-export const INDEX_STIX_ENTITIES = 'stix_domain_entities_v2';
-export const INDEX_STIX_RELATIONS = 'stix_relations';
+export const UPDATE_OPERATION_ADD = 'add';
+export const UPDATE_OPERATION_REPLACE = 'replace';
+export const UPDATE_OPERATION_REMOVE = 'remove';
+export const UPDATE_OPERATION_CHANGE = 'change';
+// Entities
+export const INDEX_INTERNAL_OBJECTS = 'opencti_internal_objects';
+export const INDEX_STIX_META_OBJECTS = 'opencti_stix_meta_objects';
+export const INDEX_STIX_DOMAIN_OBJECTS = 'opencti_stix_domain_objects';
+export const INDEX_STIX_CYBER_OBSERVABLES = 'opencti_stix_cyber_observables';
+// Relations
+export const INDEX_INTERNAL_RELATIONSHIPS = 'opencti_internal_relationships';
+export const INDEX_STIX_CORE_RELATIONSHIPS = 'opencti_stix_core_relationships';
+export const INDEX_STIX_SIGHTING_RELATIONSHIPS = 'opencti_stix_sighting_relationships';
+export const INDEX_STIX_CYBER_OBSERVABLE_RELATIONSHIPS = 'opencti_stix_cyber_observable_relationships';
+export const INDEX_STIX_META_RELATIONSHIPS = 'opencti_stix_meta_relationships';
 
-export const TYPE_OPENCTI_INTERNAL = 'Internal';
-export const TYPE_STIX_DOMAIN_ENTITY = 'Stix-Domain-Entity';
-export const TYPE_STIX_OBSERVABLE = 'Stix-Observable';
-export const TYPE_STIX_RELATION = 'stix_relation';
-export const TYPE_STIX_SIGHTING = 'stix_sighting';
-export const TYPE_STIX_OBSERVABLE_RELATION = 'stix_observable_relation';
-export const TYPE_RELATION_EMBEDDED = 'relation_embedded';
-export const TYPE_STIX_RELATION_EMBEDDED = 'stix_relation_embedded';
+export const isNotEmptyField = (field) => !R.isEmpty(field) && !R.isNil(field);
+export const isEmptyField = (field) => !isNotEmptyField(field);
+
+export const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const utcDate = (date = undefined) => (date ? moment(date).utc() : moment().utc());
 
@@ -57,19 +95,18 @@ export const fillTimeSeries = (startDate, endDate, interval, data) => {
 };
 
 export const buildPagination = (first, offset, instances, globalCount) => {
-  const edges = pipe(
-    mapObjIndexed((record, key) => {
+  const edges = R.pipe(
+    R.mapObjIndexed((record, key) => {
       const { node } = record;
-      const { relation } = record;
       const nodeOffset = offset + parseInt(key, 10) + 1;
-      return { node, relation, cursor: offsetToCursor(nodeOffset) };
+      return { node, cursor: offsetToCursor(nodeOffset) };
     }),
-    values
+    R.values
   )(instances);
   const hasNextPage = first + offset < globalCount;
   const hasPreviousPage = offset > 0;
-  const startCursor = edges.length > 0 ? head(edges).cursor : '';
-  const endCursor = edges.length > 0 ? last(edges).cursor : '';
+  const startCursor = edges.length > 0 ? R.head(edges).cursor : '';
+  const endCursor = edges.length > 0 ? R.last(edges).cursor : '';
   const pageInfo = {
     startCursor,
     endCursor,
@@ -80,19 +117,59 @@ export const buildPagination = (first, offset, instances, globalCount) => {
   return { edges, pageInfo };
 };
 
-export const inferIndexFromConceptTypes = (types, parentType = null) => {
-  // Observable index
-  if (includes(TYPE_STIX_OBSERVABLE, types) || parentType === TYPE_STIX_OBSERVABLE) return INDEX_STIX_OBSERVABLE;
-  // Relation index
-  if (includes(TYPE_STIX_RELATION, types) || parentType === TYPE_STIX_RELATION) return INDEX_STIX_RELATIONS;
-  if (includes(TYPE_STIX_SIGHTING, types) || parentType === TYPE_STIX_SIGHTING) return INDEX_STIX_RELATIONS;
-  if (includes(TYPE_STIX_OBSERVABLE_RELATION, types) || parentType === TYPE_STIX_OBSERVABLE_RELATION)
-    return INDEX_STIX_RELATIONS;
-  if (includes(TYPE_STIX_RELATION_EMBEDDED, types) || parentType === TYPE_STIX_RELATION_EMBEDDED)
-    return INDEX_STIX_RELATIONS;
-  if (includes(TYPE_RELATION_EMBEDDED, types) || parentType === TYPE_RELATION_EMBEDDED) return INDEX_STIX_RELATIONS;
-  // Everything else in entities index
-  return INDEX_STIX_ENTITIES;
+export const inferIndexFromConceptType = (conceptType) => {
+  // Entities
+  if (isInternalObject(conceptType)) return INDEX_INTERNAL_OBJECTS;
+  if (isStixMetaObject(conceptType)) return INDEX_STIX_META_OBJECTS;
+  if (isStixDomainObject(conceptType)) return INDEX_STIX_DOMAIN_OBJECTS;
+  if (isStixCyberObservable(conceptType)) return INDEX_STIX_CYBER_OBSERVABLES;
+  // Relations
+  if (isInternalRelationship(conceptType)) return INDEX_INTERNAL_RELATIONSHIPS;
+  if (isStixCoreRelationship(conceptType)) return INDEX_STIX_CORE_RELATIONSHIPS;
+  if (isStixSightingRelationship(conceptType)) return INDEX_STIX_SIGHTING_RELATIONSHIPS;
+  if (isStixCyberObservableRelationship(conceptType)) return INDEX_STIX_CYBER_OBSERVABLE_RELATIONSHIPS;
+  if (isStixMetaRelationship(conceptType)) return INDEX_STIX_META_RELATIONSHIPS;
+  throw DatabaseError(`Cant find index for type ${conceptType}`);
+};
+
+export const observableValue = (stixCyberObservable) => {
+  switch (stixCyberObservable.entity_type) {
+    case ENTITY_AUTONOMOUS_SYSTEM:
+      return stixCyberObservable.number || 'Unknown';
+    case ENTITY_DIRECTORY:
+      return stixCyberObservable.path || 'Unknown';
+    case ENTITY_EMAIL_MESSAGE:
+      return stixCyberObservable.body || stixCyberObservable.subject;
+    case ENTITY_HASHED_OBSERVABLE_ARTIFACT:
+      if (R.values(stixCyberObservable.hashes).length > 0) {
+        return R.values(stixCyberObservable.hashes)[0];
+      }
+      return stixCyberObservable.payload_bin || 'Unknown';
+    case ENTITY_HASHED_OBSERVABLE_STIX_FILE:
+      if (R.values(stixCyberObservable.hashes).length > 0) {
+        return R.values(stixCyberObservable.hashes)[0];
+      }
+      return stixCyberObservable.name || 'Unknown';
+    case ENTITY_HASHED_OBSERVABLE_X509_CERTIFICATE:
+      if (R.values(stixCyberObservable.hashes).length > 0) {
+        return R.values(stixCyberObservable.hashes)[0];
+      }
+      return stixCyberObservable.subject || stixCyberObservable.issuer || 'Unknown';
+    case ENTITY_MUTEX:
+      return stixCyberObservable.name || 'Unknown';
+    case ENTITY_NETWORK_TRAFFIC:
+      return stixCyberObservable.dst_port || 'Unknown';
+    case ENTITY_PROCESS:
+      return stixCyberObservable.pid || 'Unknown';
+    case ENTITY_SOFTWARE:
+      return stixCyberObservable.name || 'Unknown';
+    case ENTITY_USER_ACCOUNT:
+      return stixCyberObservable.account_login || 'Unknown';
+    case ENTITY_WINDOWS_REGISTRY_KEY:
+      return stixCyberObservable.attribute_key;
+    default:
+      return stixCyberObservable.value || 'Unknown';
+  }
 };
 
 const extractEntityMainValue = (entityData) => {
@@ -101,6 +178,10 @@ const extractEntityMainValue = (entityData) => {
     mainValue = entityData.definition;
   } else if (entityData.value) {
     mainValue = entityData.value;
+  } else if (entityData.attribute_abstract) {
+    mainValue = entityData.attribute_abstract;
+  } else if (entityData.opinion) {
+    mainValue = entityData.opinion;
   } else if (entityData.observable_value) {
     mainValue = entityData.observable_value;
   } else if (entityData.indicator_pattern) {
@@ -109,56 +190,77 @@ const extractEntityMainValue = (entityData) => {
     mainValue = `${entityData.source_name}${entityData.external_id ? ` (${entityData.external_id})` : ''}`;
   } else if (entityData.phase_name) {
     mainValue = entityData.phase_name;
+  } else if (entityData.first_observed && entityData.last_observed) {
+    mainValue = `${moment(entityData.first_observed).utc().toISOString()} - ${moment(entityData.last_observed)
+      .utc()
+      .toISOString()}`;
   } else if (entityData.name) {
     mainValue = entityData.name;
-  } else {
+  } else if (entityData.description) {
     mainValue = entityData.description;
+  } else {
+    mainValue = observableValue(entityData);
   }
   return mainValue;
 };
 
-export const generateLogMessage = (eventType, eventUser, eventData, eventExtraData) => {
-  let fromValue;
-  let fromType;
-  let toValue;
-  let toType;
-  let toRelationType;
-  if (eventExtraData && eventExtraData.from) {
-    fromValue = extractEntityMainValue(eventExtraData.from);
-    fromType = eventExtraData.from.entity_type;
-  }
-  if (eventExtraData && eventExtraData.to) {
-    toValue = extractEntityMainValue(eventExtraData.to);
-    toType = eventExtraData.to.entity_type;
-    toRelationType = eventExtraData.to.relationship_type;
-  }
-  const name = extractEntityMainValue(eventData);
-  let message = '';
-  if (eventType === 'create') {
-    message += 'created a ';
-  } else if (eventType === 'update') {
-    message += 'updated the field ';
-  } else if (eventType === 'update_add') {
-    message += 'added the ';
-  } else if (eventType === 'update_remove') {
-    message += 'removed the ';
-  } else if (eventType === 'delete') {
-    message += 'deleted the ';
-  }
-  if (eventData.relationship_type && eventData.entity_type !== 'relation_embedded') {
-    message += `relation \`${eventData.relationship_type}\` from ${fromType} \`${fromValue}\` to ${toType} \`${toValue}\`.`;
-  } else if (eventData.entity_type === 'relation_embedded') {
-    if (eventType === 'update') {
-      message += `\`${eventData.relationship_type}\` with the value \`${toValue}\`.`;
-    } else if (toType === 'stix_relation') {
-      message += `relation \`${toRelationType}\`${toValue ? `with value \`${toValue}\`` : ''}.`;
+export const relationTypeToInputName = (type) => {
+  let inputName = '';
+  const isMeta = isStixInternalMetaRelationship(type) && type !== RELATION_OBJECT_LABEL;
+  const elements = type.split('-');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index];
+    if (index > 0) {
+      inputName += element.charAt(0).toUpperCase() + element.slice(1);
     } else {
-      message += `\`${toType}\` with value \`${toValue}\`.`;
+      inputName += element;
     }
-  } else if (eventType === 'update') {
-    message += `\`${eventExtraData.key}\` with \`${join(', ', eventExtraData.value)}\`.`;
-  } else {
-    message += `${eventData.entity_type} \`${name}\`.`;
   }
-  return message;
+  return inputName + (isMeta ? 's' : '');
+};
+
+const valToMessage = (val) => {
+  if (Array.isArray(val)) {
+    const values = R.filter((v) => isNotEmptyField(v), val);
+    return values.length > 0 ? values.map((item) => valToMessage(item)) : null;
+  }
+  if (val && typeof val === 'object') {
+    const valEntries = R.filter(([, v]) => isNotEmptyField(v), Object.entries(val));
+    return valEntries.map(([k, v]) => `${k}: ${v}`).join(', ');
+  }
+  return isNotEmptyField(val) ? val.toString() : null;
+};
+
+export const generateLogMessage = (type, instance, input = null) => {
+  const name = extractEntityMainValue(instance);
+  if (type === EVENT_TYPE_CREATE || type === EVENT_TYPE_DELETE || type === EVENT_TYPE_MERGE) {
+    if (isStixObject(instance.entity_type)) {
+      return `${type}s a ${instance.entity_type} \`${name}\``;
+    }
+    // Relation
+    const from = extractEntityMainValue(instance.from);
+    const fromType = instance.from.entity_type;
+    const to = extractEntityMainValue(instance.to);
+    const toType = instance.to.entity_type;
+    return `${type}s the relation ${instance.entity_type} from \`${from}\` (${fromType}) to \`${to}\` (${toType})`;
+  }
+  if (
+    type === UPDATE_OPERATION_REPLACE ||
+    type === UPDATE_OPERATION_ADD ||
+    type === UPDATE_OPERATION_REMOVE ||
+    type === UPDATE_OPERATION_CHANGE
+  ) {
+    const joiner = type === UPDATE_OPERATION_REPLACE ? 'by' : 'value';
+    const fieldMessage = R.map(([key, val]) => {
+      return `\`${key}\` ${joiner} \`${valToMessage(val) || 'nothing'}\``;
+    }, Object.entries(input)).join(', ');
+    return `${type}s the ${fieldMessage}`;
+  }
+  throw FunctionalError(`Cant generated message for event type ${type}`);
+};
+
+export const pascalize = (s) => {
+  return s.replace(/(\w)(\w*)/g, (g0, g1, g2) => {
+    return g1.toUpperCase() + g2.toLowerCase();
+  });
 };

@@ -1,13 +1,28 @@
-import { addSector, findAll, findById, isSubSector, subSectors, parentSectors } from '../domain/sector';
 import {
-  stixDomainEntityAddRelation,
-  stixDomainEntityCleanContext,
-  stixDomainEntityDelete,
-  stixDomainEntityDeleteRelation,
-  stixDomainEntityEditContext,
-  stixDomainEntityEditField,
-} from '../domain/stixDomainEntity';
-import { REL_INDEX_PREFIX } from '../database/elasticSearch';
+  addSector,
+  findAll,
+  findById,
+  batchIsSubSector,
+  batchParentSectors,
+  batchSubSectors,
+  targetedOrganizations,
+} from '../domain/sector';
+import {
+  stixDomainObjectAddRelation,
+  stixDomainObjectCleanContext,
+  stixDomainObjectDelete,
+  stixDomainObjectDeleteRelation,
+  stixDomainObjectEditContext,
+  stixDomainObjectEditField,
+} from '../domain/stixDomainObject';
+import { RELATION_CREATED_BY, RELATION_OBJECT_LABEL, RELATION_OBJECT_MARKING } from '../schema/stixMetaRelationship';
+import { RELATION_PART_OF } from '../schema/stixCoreRelationship';
+import { REL_INDEX_PREFIX } from '../schema/general';
+import { initBatchLoader } from '../database/middleware';
+
+const parentSectorsLoader = initBatchLoader(batchParentSectors);
+const subSectorsLoader = initBatchLoader(batchSubSectors);
+const isSubSectorLoader = initBatchLoader(batchIsSubSector);
 
 const sectorResolvers = {
   Query: {
@@ -15,24 +30,26 @@ const sectorResolvers = {
     sectors: (_, args) => findAll(args),
   },
   Sector: {
-    parentSectors: (sector) => parentSectors(sector.id),
-    subSectors: (sector) => subSectors(sector.id),
-    isSubSector: (sector, args) => isSubSector(sector.id, args),
+    parentSectors: (sector) => parentSectorsLoader.load(sector.id),
+    subSectors: (sector) => subSectorsLoader.load(sector.id),
+    isSubSector: (sector) => isSubSectorLoader.load(sector.id),
+    targetedOrganizations: (sector) => targetedOrganizations(sector.id),
   },
   SectorsFilter: {
-    createdBy: `${REL_INDEX_PREFIX}created_by_ref.internal_id_key`,
-    markingDefinitions: `${REL_INDEX_PREFIX}object_marking_refs.internal_id_key`,
-    tags: `${REL_INDEX_PREFIX}tagged.internal_id_key`,
-    gatheredBy: `${REL_INDEX_PREFIX}gathering.internal_id_key`,
+    createdBy: `${REL_INDEX_PREFIX}${RELATION_CREATED_BY}.internal_id`,
+    markedBy: `${REL_INDEX_PREFIX}${RELATION_OBJECT_MARKING}.internal_id`,
+    labelledBy: `${REL_INDEX_PREFIX}${RELATION_OBJECT_LABEL}.internal_id`,
+    partOf: `${REL_INDEX_PREFIX}${RELATION_PART_OF}.internal_id`,
   },
   Mutation: {
     sectorEdit: (_, { id }, { user }) => ({
-      delete: () => stixDomainEntityDelete(user, id),
-      fieldPatch: ({ input }) => stixDomainEntityEditField(user, id, input),
-      contextPatch: ({ input }) => stixDomainEntityEditContext(user, id, input),
-      contextClean: () => stixDomainEntityCleanContext(user, id),
-      relationAdd: ({ input }) => stixDomainEntityAddRelation(user, id, input),
-      relationDelete: ({ relationId }) => stixDomainEntityDeleteRelation(user, id, relationId),
+      delete: () => stixDomainObjectDelete(user, id),
+      fieldPatch: ({ input }) => stixDomainObjectEditField(user, id, input),
+      contextPatch: ({ input }) => stixDomainObjectEditContext(user, id, input),
+      contextClean: () => stixDomainObjectCleanContext(user, id),
+      relationAdd: ({ input }) => stixDomainObjectAddRelation(user, id, input),
+      relationDelete: ({ toId, relationship_type: relationshipType }) =>
+        stixDomainObjectDeleteRelation(user, id, toId, relationshipType),
     }),
     sectorAdd: (_, { input }, { user }) => addSector(user, input),
   },

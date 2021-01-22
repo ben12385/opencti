@@ -265,13 +265,13 @@ const ProfileOverview = createFragmentContainer(ProfileOverviewComponent, {
   me: graphql`
     fragment ProfileOverview_me on User {
       name
-      description
       user_email
       external
       firstname
       lastname
       language
       token
+      description
     }
   `,
 });

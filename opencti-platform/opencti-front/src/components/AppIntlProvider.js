@@ -14,11 +14,12 @@ import { UserContext } from '../utils/Security';
 
 const AppIntlProvider = (props) => {
   const { children } = props;
-  const me = useContext(UserContext);
+  const { me } = useContext(UserContext);
   const intlError = (error) => {
     const matchingLocale = /for locale: "([a-z]+)"/gm;
     const regMatch = matchingLocale.exec(error);
     const currentLocale = regMatch !== null ? regMatch[1] : null;
+    // eslint-disable-next-line no-console
     if (currentLocale && currentLocale !== 'en') console.error(error);
   };
   const platformLanguage = pathOr(
@@ -29,18 +30,27 @@ const AppIntlProvider = (props) => {
   const platformLang = platformLanguage !== null && platformLanguage !== 'auto'
     ? props.settings.platform_language
     : locale;
-  const lang = me.language !== null && me.language !== undefined && me.language !== 'auto'
+  const lang = me
+    && me.language !== null
+    && me.language !== undefined
+    && me.language !== 'auto'
     ? me.language
     : platformLang;
   return (
-      <IntlProvider locale={lang} onError={intlError} key={lang} messages={i18n.messages[lang]}>
-        <MuiPickersUtilsProvider
-          utils={MomentUtils}
-          locale={lang}
-          moment={moment}>
-          {children}
-        </MuiPickersUtilsProvider>
-      </IntlProvider>
+    <IntlProvider
+      locale={lang}
+      onError={intlError}
+      key={lang}
+      messages={i18n.messages[lang]}
+    >
+      <MuiPickersUtilsProvider
+        utils={MomentUtils}
+        locale={lang}
+        moment={moment}
+      >
+        {children}
+      </MuiPickersUtilsProvider>
+    </IntlProvider>
   );
 };
 

@@ -59,7 +59,10 @@ class TopMenuSector extends Component {
           <DomainOutlined className={classes.icon} fontSize="small" />
           {t('Sectors')}
         </Button>
-        <ArrowForwardIosOutlined color="inherit" classes={{ root: classes.arrow }} />
+        <ArrowForwardIosOutlined
+          color="inherit"
+          classes={{ root: classes.arrow }}
+        />
         <Button
           component={Link}
           to={`/dashboard/entities/sectors/${sectorId}`}
@@ -102,23 +105,23 @@ class TopMenuSector extends Component {
         </Button>
         <Button
           component={Link}
-          to={`/dashboard/entities/sectors/${sectorId}/reports`}
+          to={`/dashboard/entities/sectors/${sectorId}/analysis`}
           variant={
             location.pathname
-            === `/dashboard/entities/sectors/${sectorId}/reports`
+            === `/dashboard/entities/sectors/${sectorId}/analysis`
               ? 'contained'
               : 'text'
           }
           size="small"
           color={
             location.pathname
-            === `/dashboard/entities/sectors/${sectorId}/reports`
+            === `/dashboard/entities/sectors/${sectorId}/analysis`
               ? 'primary'
               : 'inherit'
           }
           classes={{ root: classes.button }}
         >
-          {t('Reports')}
+          {t('Analysis')}
         </Button>
         <Security needs={[KNOWLEDGE_KNUPLOAD, KNOWLEDGE_KNGETEXPORT]}>
           <Button

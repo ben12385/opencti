@@ -1,24 +1,24 @@
 import moment from 'moment';
-import { assoc, concat, descend, dissoc, head, includes, map, pipe, prop, sortWith } from 'ramda';
+import { assoc, descend, dissoc, head, includes, isNil, map, pipe, prop, sortWith } from 'ramda';
 import { Promise } from 'bluebird';
 import {
   createEntity,
-  escapeString,
-  findWithConnectedRelations,
+  createRelation,
   listEntities,
-  loadEntityById,
-  loadEntityByStixId,
+  batchListThroughGetTo,
+  loadById,
   now,
-} from '../database/grakn';
-import { BUS_TOPICS, logger } from '../config/conf';
+} from '../database/middleware';
+import { BUS_TOPICS } from '../config/conf';
 import { notify } from '../database/redis';
-import { buildPagination, TYPE_STIX_OBSERVABLE } from '../database/utils';
 import { findById as findMarkingDefinitionById } from './markingDefinition';
 import { findById as findKillChainPhaseById } from './killChainPhase';
-import { askEnrich } from './enrichment';
-import { checkIndicatorSyntax, extractObservables } from '../python/pythonBridge';
-import { OBSERVABLE_TYPES } from '../database/stix';
+import { checkIndicatorSyntax } from '../python/pythonBridge';
 import { FunctionalError } from '../config/errors';
+import { ENTITY_TYPE_INDICATOR } from '../schema/stixDomainObject';
+import { isStixCyberObservable } from '../schema/stixCyberObservable';
+import { RELATION_BASED_ON } from '../schema/stixCoreRelationship';
+import { ABSTRACT_STIX_CYBER_OBSERVABLE, ABSTRACT_STIX_DOMAIN_OBJECT } from '../schema/general';
 
 const OpenCTITimeToLive = {
   // Formatted as "[Marking-Definition]-[KillChainPhaseIsDelivery]"
@@ -95,114 +95,62 @@ const computeValidUntil = async (indicator) => {
   const ttlPattern = `${markingDefinition}-${isKillChainPhaseDelivery}`;
   let ttl = OpenCTITimeToLive.default[ttlPattern];
   const mainObservableType =
-    indicator.main_observable_type && indicator.main_observable_type.includes('File')
+    indicator.x_opencti_main_observable_type && indicator.x_opencti_main_observable_type.includes('File')
       ? 'File'
-      : indicator.main_observable_type;
-  if (mainObservableType && includes(indicator.main_observable_type, OpenCTITimeToLive)) {
-    ttl = OpenCTITimeToLive[indicator.main_observable_type][ttlPattern];
+      : indicator.x_opencti_main_observable_type;
+  if (mainObservableType && includes(indicator.x_opencti_main_observable_type, OpenCTITimeToLive)) {
+    ttl = OpenCTITimeToLive[indicator.x_opencti_main_observable_type][ttlPattern];
   }
   const validUntil = validFrom.add(ttl, 'days');
   return validUntil.toDate();
 };
 
 export const findById = (indicatorId) => {
-  if (indicatorId.match(/[a-z-]+--[\w-]{36}/g)) {
-    return loadEntityByStixId(indicatorId, 'Indicator');
-  }
-  return loadEntityById(indicatorId, 'Indicator');
-};
-export const findAll = (args) => {
-  return listEntities(['Indicator'], ['name', 'alias'], args);
+  return loadById(indicatorId, ENTITY_TYPE_INDICATOR);
 };
 
-export const addIndicator = async (user, indicator, createObservables = true) => {
-  if (!OBSERVABLE_TYPES.includes(indicator.main_observable_type.toLowerCase())) {
-    throw FunctionalError(`Observable type ${indicator.main_observable_type} is not supported.`);
+export const findAll = (args) => {
+  return listEntities([ENTITY_TYPE_INDICATOR], args);
+};
+
+export const addIndicator = async (user, indicator) => {
+  if (
+    indicator.x_opencti_main_observable_type !== 'Unknown' &&
+    !isStixCyberObservable(indicator.x_opencti_main_observable_type)
+  ) {
+    throw FunctionalError(`Observable type ${indicator.x_opencti_main_observable_type} is not supported.`);
   }
   // check indicator syntax
-  const check = await checkIndicatorSyntax(indicator.pattern_type.toLowerCase(), indicator.indicator_pattern);
+  const check = await checkIndicatorSyntax(indicator.pattern_type.toLowerCase(), indicator.pattern);
   if (check === false) {
     throw FunctionalError(`Indicator of type ${indicator.pattern_type} is not correctly formatted.`);
   }
   const indicatorToCreate = pipe(
-    assoc('main_observable_type', indicator.main_observable_type.toLowerCase()),
-    assoc('score', indicator.score ? indicator.score : 50),
-    assoc('valid_from', indicator.valid_from ? indicator.valid_from : now()),
-    assoc('valid_until', indicator.valid_until ? indicator.valid_until : await computeValidUntil(indicator))
+    dissoc('basedOn'),
+    assoc(
+      'x_opencti_main_observable_type',
+      isNil(indicator.x_opencti_main_observable_type) ? 'Unknown' : indicator.x_opencti_main_observable_type
+    ),
+    assoc('x_opencti_score', isNil(indicator.x_opencti_score) ? 50 : indicator.x_opencti_score),
+    assoc('x_opencti_detection', isNil(indicator.x_opencti_detection) ? false : indicator.x_opencti_detection),
+    assoc('valid_from', isNil(indicator.valid_from) ? now() : indicator.valid_from),
+    assoc('valid_until', isNil(indicator.valid_until) ? await computeValidUntil(indicator) : indicator.valid_until)
   )(indicator);
   // create the linked observables
   let observablesToLink = [];
-  const observablesToEnrich = [];
-  if (createObservables && indicator.pattern_type === 'stix') {
-    try {
-      const observables = await extractObservables(indicator.indicator_pattern);
-      if (observables && observables.length > 0) {
-        observablesToLink = await Promise.all(
-          observables.map(async (observable) => {
-            const args = {
-              parentType: 'Stix-Observable',
-              filters: [{ key: 'observable_value', values: [observable.value] }],
-            };
-            const existingObservables = await listEntities(
-              ['Stix-Observable'],
-              ['name', 'description', 'observable_value'],
-              args
-            );
-            if (existingObservables.edges.length === 0) {
-              const stixObservable = pipe(
-                dissoc('internal_id_key'),
-                dissoc('stix_id_key'),
-                dissoc('main_observable_type'),
-                dissoc('confidence'),
-                dissoc('score'),
-                dissoc('detection'),
-                dissoc('valid_from'),
-                dissoc('valid_until'),
-                dissoc('pattern_type'),
-                dissoc('indicator_pattern'),
-                dissoc('created'),
-                dissoc('modified'),
-                assoc('type', observable.type),
-                assoc('observable_value', observable.value)
-              )(indicatorToCreate);
-              const innerType = stixObservable.type;
-              const stixObservableToCreate = dissoc('type', stixObservable);
-              const createdStixObservable = await createEntity(user, stixObservableToCreate, innerType, {
-                modelType: TYPE_STIX_OBSERVABLE,
-                stixIdType: 'observable',
-              });
-              observablesToEnrich.push({ id: createdStixObservable.id, type: innerType });
-              return createdStixObservable.id;
-            }
-            return existingObservables.edges[0].node.id;
-          })
-        );
-      }
-    } catch (err) {
-      logger.info(`Cannot create observable`, { error: err });
-    }
+  if (indicator.basedOn) {
+    observablesToLink = indicator.basedOn;
   }
-  let observableRefs;
-  if (indicatorToCreate.observableRefs) {
-    observableRefs = concat(indicatorToCreate.observableRefs, observablesToLink);
-  } else {
-    observableRefs = observablesToLink;
-  }
-  const created = await createEntity(user, assoc('observableRefs', observableRefs, indicatorToCreate), 'Indicator');
+  const created = await createEntity(user, indicatorToCreate, ENTITY_TYPE_INDICATOR);
   await Promise.all(
-    observablesToEnrich.map((observableToEnrich) => {
-      return askEnrich(observableToEnrich.id, observableToEnrich.type);
+    observablesToLink.map((observableToLink) => {
+      const input = { fromId: created.id, toId: observableToLink, relationship_type: RELATION_BASED_ON };
+      return createRelation(user, input);
     })
   );
-  return notify(BUS_TOPICS.StixDomainEntity.ADDED_TOPIC, created, user);
+  return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].ADDED_TOPIC, created, user);
 };
 
-export const observableRefs = (indicatorId) => {
-  return findWithConnectedRelations(
-    `match $from isa Indicator; $rel(observables_aggregation:$from, soo:$to) isa observable_refs;
-    $to isa Stix-Observable;
-    $from has internal_id_key "${escapeString(indicatorId)}"; get;`,
-    'to',
-    { extraRelKey: 'rel' }
-  ).then((data) => buildPagination(0, 0, data, data.length));
+export const batchObservables = (indicatorIds) => {
+  return batchListThroughGetTo(indicatorIds, RELATION_BASED_ON, ABSTRACT_STIX_CYBER_OBSERVABLE);
 };

@@ -58,7 +58,7 @@ export const FileManagerExportMutation = graphql`
     $exportType: String!
     $maxMarkingDefinition: String
   ) {
-    stixDomainEntityEdit(id: $id) {
+    stixDomainObjectEdit(id: $id) {
       exportAsk(
         format: $format
         exportType: $exportType
@@ -68,6 +68,16 @@ export const FileManagerExportMutation = graphql`
         name
         uploadStatus
         lastModifiedSinceMin
+        metaData {
+          messages {
+            timestamp
+            message
+          }
+          errors {
+            timestamp
+            message
+          }
+        }
       }
     }
   }
@@ -126,7 +136,7 @@ const FileManager = ({
         maxMarkingDefinition,
       },
       updater: (store) => {
-        const root = store.getRootField('stixDomainEntityEdit');
+        const root = store.getRootField('stixDomainObjectEdit');
         const payloads = root.getLinkedRecords('exportAsk', {
           format: values.format,
           exportType: values.type,

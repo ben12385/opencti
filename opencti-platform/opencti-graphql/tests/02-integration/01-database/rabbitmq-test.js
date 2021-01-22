@@ -1,4 +1,3 @@
-import { head } from 'ramda';
 import { v4 as uuid } from 'uuid';
 import {
   getRabbitMQVersion,
@@ -22,14 +21,6 @@ describe('Rabbit basic and utils', () => {
     expect(data).not.toBeNull();
     expect(data.consumers).toEqual(0);
     expect(data.overview.management_version).toEqual(expect.stringMatching(/^3.8\./g));
-    expect(data.overview.message_stats.redeliver).toEqual(0);
-    expect(data.overview.message_stats.return_unroutable).toEqual(0);
-    expect(data.overview.queue_totals.messages_unacknowledged).toEqual(0);
-    expect(data.queues.length).toEqual(1);
-    const logQueue = head(data.queues);
-    expect(logQueue.name).toEqual('logs_all');
-    expect(logQueue.state).toEqual('running');
-    expect(logQueue.arguments.name).toEqual('OpenCTI logs queue');
   });
 });
 
@@ -50,15 +41,14 @@ describe('Rabbit connector management', () => {
     // Just wait one second to let redis client initialize
     const data = await metrics();
     expect(data).not.toBeNull();
-    expect(data.queues.length).toEqual(3);
+    expect(data.queues.length).toEqual(2);
     const aggregationMap = new Map(data.queues.map((q) => [q.name, q]));
-    expect(aggregationMap.get('logs_all')).not.toBeUndefined();
     expect(aggregationMap.get(`listen_${connectorId}`)).not.toBeUndefined();
     expect(aggregationMap.get(`push_${connectorId}`)).not.toBeUndefined();
   });
   it('should push message to connector', async () => {
-    const connector = { internal_id_key: connectorId };
-    await pushToConnector(connector, { work_id: uuid() });
+    const connector = { internal_id: connectorId };
+    await pushToConnector(connector, { id: uuid() });
   });
   it('should delete connector', async () => {
     const unregister = await unregisterConnector(connectorId);

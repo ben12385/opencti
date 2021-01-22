@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { compose, propOr, pathOr } from 'ramda';
 import { withStyles } from '@material-ui/core/styles';
 import inject18n from '../../../components/i18n';
-import EntityStixRelationsTable from '../common/stix_relations/EntityStixRelationsTable';
+import EntityStixCoreRelationshipsTable from '../common/stix_core_relationships/EntityStixCoreRelationshipsTable';
 
 const styles = () => ({
   container: {
@@ -14,41 +14,35 @@ const styles = () => ({
 class AttackPatternsDistribution extends Component {
   render() {
     const {
-      configuration,
-      handleOpenConfig,
-      inferred,
-      startDate,
-      endDate,
+      configuration, handleOpenConfig, startDate, endDate,
     } = this.props;
     switch (configuration.graph_type) {
       case 'table':
         return (
-          <EntityStixRelationsTable
+          <EntityStixCoreRelationshipsTable
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
             entityType="Attack-Pattern"
-            relationType="uses"
+            relationshipType="uses"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
         );
       default:
         return (
-          <EntityStixRelationsTable
+          <EntityStixCoreRelationshipsTable
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
             entityType="Attack-Pattern"
-            relationType="uses"
+            relationshipType="uses"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
@@ -60,7 +54,6 @@ class AttackPatternsDistribution extends Component {
 AttackPatternsDistribution.propTypes = {
   configuration: PropTypes.object,
   handleOpenConfig: PropTypes.func,
-  inferred: PropTypes.bool,
   startDate: PropTypes.string,
   endDate: PropTypes.string,
   classes: PropTypes.object,

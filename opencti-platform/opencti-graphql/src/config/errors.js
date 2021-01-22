@@ -49,9 +49,41 @@ export const UnknownError = (reason, data) =>
     ...data,
   });
 
+const UNSUPPORTED_ERROR = 'UnsupportedError';
+export const UnsupportedError = (reason, data) =>
+  error(UNSUPPORTED_ERROR, 'Unsupported element', {
+    reason: reason || 'No reason specify',
+    category: CATEGORY_BUSINESS,
+    ...data,
+  });
+
 export const FunctionalError = (reason, data) =>
   error('FunctionalError', 'Business validation', {
     reason: reason || 'No reason specify',
+    category: CATEGORY_BUSINESS,
+    ...data,
+  });
+
+export const TYPE_LOCK_ERROR = 'LockError';
+export const LockTimeoutError = (data) =>
+  error(TYPE_LOCK_ERROR, 'Lock timeout', {
+    reason: 'Execution timeout, too many concurrent call on the same entities',
+    category: CATEGORY_BUSINESS,
+    ...data,
+  });
+
+export const TYPE_DUPLICATE_ENTRY = 'DuplicateEntryError';
+export const DuplicateEntryError = (reason, data) =>
+  error(TYPE_DUPLICATE_ENTRY, 'Existing element', {
+    reason: reason || 'No reason specify',
+    category: CATEGORY_BUSINESS,
+    ...data,
+  });
+
+export const MISSING_REF_ERROR = 'MissingReferenceError';
+export const MissingReferenceError = (data) =>
+  error(MISSING_REF_ERROR, 'Element not found', {
+    reason: 'Missing reference to handle creation',
     category: CATEGORY_BUSINESS,
     ...data,
   });

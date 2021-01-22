@@ -84,14 +84,14 @@ export default createPaginationContainer(
   {
     data: graphql`
       fragment CountriesLines_data on Query
-        @argumentDefinitions(
-          search: { type: "String" }
-          count: { type: "Int", defaultValue: 25 }
-          cursor: { type: "ID" }
-          orderBy: { type: "CountriesOrdering", defaultValue: "name" }
-          orderMode: { type: "OrderingMode", defaultValue: "asc" }
-          filters: { type: "[CountriesFiltering]" }
-        ) {
+      @argumentDefinitions(
+        search: { type: "String" }
+        count: { type: "Int", defaultValue: 25 }
+        cursor: { type: "ID" }
+        orderBy: { type: "CountriesOrdering", defaultValue: name }
+        orderMode: { type: "OrderingMode", defaultValue: asc }
+        filters: { type: "[CountriesFiltering]" }
+      ) {
         countries(
           search: $search
           first: $count

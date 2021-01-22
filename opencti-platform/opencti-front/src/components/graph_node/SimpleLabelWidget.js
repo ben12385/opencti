@@ -37,15 +37,7 @@ class SimpleLabelWidget extends Component {
           className={classes.item}
           onClick={model.setSelected.bind(this, true)}
         >
-          <strong>{t(`relation_${label.relationship_type}`)}</strong>
-          {label.inferred === true ? (
-            <span>
-              <br />
-              <em>{t('Inferred')}</em>
-            </span>
-          ) : (
-            ''
-          )}
+          <strong>{t(`relationship_${label.relationship_type}`)}</strong>
           {label.first_seen ? (
             <span>
               <br />
@@ -61,7 +53,7 @@ class SimpleLabelWidget extends Component {
     }
     return (
       <div className={classes.item}>
-        <strong>{t(`relation_${label.relationship_type}`)}</strong>
+        <strong>{t(`relationship_${label.relationship_type}`)}</strong>
         <span>
           <br />
           <em>
@@ -80,7 +72,4 @@ SimpleLabelWidget.propTypes = {
   nsd: PropTypes.func,
 };
 
-export default compose(
-  inject18n,
-  withStyles(styles),
-)(SimpleLabelWidget);
+export default compose(inject18n, withStyles(styles))(SimpleLabelWidget);

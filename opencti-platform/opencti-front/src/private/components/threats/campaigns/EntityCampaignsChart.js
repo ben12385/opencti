@@ -54,8 +54,7 @@ const entityCampaignsChartCampaignsTimeSeriesQuery = graphql`
     $startDate: DateTime!
     $endDate: DateTime!
     $interval: String!
-    $inferred: Boolean
-    $relationType: String!
+    $relationship_type: String!
   ) {
     campaignsTimeSeries(
       objectId: $objectId
@@ -64,8 +63,7 @@ const entityCampaignsChartCampaignsTimeSeriesQuery = graphql`
       startDate: $startDate
       endDate: $endDate
       interval: $interval
-      inferred: $inferred
-      relationType: $relationType
+      relationship_type: $relationship_type
     ) {
       date
       value
@@ -99,7 +97,12 @@ class EntityCampaignsChart extends Component {
 
   renderContent() {
     const {
-      t, md, entityId, relationType, variant, inferred,
+      t,
+      md,
+      entityId,
+      // eslint-disable-next-line camelcase
+      relationship_type,
+      variant,
     } = this.props;
     const campaignsTimeSeriesVariables = {
       objectId: entityId,
@@ -108,8 +111,8 @@ class EntityCampaignsChart extends Component {
       startDate: monthsAgo(this.state.period),
       endDate: now(),
       interval: 'month',
-      relationType: relationType || 'targets',
-      inferred: inferred || false,
+      // eslint-disable-next-line camelcase
+      relationship_type: relationship_type || 'targets',
     };
     return (
       <QueryRenderer
@@ -203,11 +206,13 @@ class EntityCampaignsChart extends Component {
             {title || t('Campaigns')}
           </Typography>
           <Security needs={[EXPLORE_EXUPDATE]}>
-            <IconButton color="secondary"
+            <IconButton
+              color="secondary"
               aria-label="Update"
               size="small"
               classes={{ root: classes.updateButton }}
-              onClick={handleOpenConfig.bind(this, configuration)}>
+              onClick={handleOpenConfig.bind(this, configuration)}
+            >
               <SettingsInputComponent fontSize="inherit" />
             </IconButton>
           </Security>
@@ -268,8 +273,7 @@ EntityCampaignsChart.propTypes = {
   md: PropTypes.func,
   configuration: PropTypes.object,
   handleOpenConfig: PropTypes.func,
-  inferred: PropTypes.bool,
-  relationType: PropTypes.string,
+  relationship_type: PropTypes.string,
 };
 
 export default compose(inject18n, withStyles(styles))(EntityCampaignsChart);

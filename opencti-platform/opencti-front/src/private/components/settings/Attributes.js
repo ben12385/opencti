@@ -10,8 +10,10 @@ import {
   saveViewParameters,
 } from '../../../utils/ListParameters';
 import inject18n from '../../../components/i18n';
+// TODO @Sam fix dependency cycle
+// eslint-disable-next-line import/no-cycle
 import ListLines from '../../../components/list_lines/ListLines';
-import TagsAttributesMenu from './TagsAttributesMenu';
+import LabelsAttributesMenu from './LabelsAttributesMenu';
 import AttributesLines, {
   attributesLinesQuery,
 } from './attributes/AttributesLines';
@@ -25,8 +27,8 @@ const styles = () => ({
 });
 
 export const attributesSearchQuery = graphql`
-  query AttributesSearchQuery($type: String!, $search: String, $first: Int) {
-    attributes(type: $type, search: $search, first: $first) {
+  query AttributesSearchQuery($key: String!, $search: String, $first: Int) {
+    attributes(key: $key, search: $search, first: $first) {
       edges {
         node {
           id
@@ -110,21 +112,21 @@ class Attributes extends Component {
     const {
       classes,
       match: {
-        params: { attributeLabel },
+        params: { attributeKey },
       },
     } = this.props;
     const { view, searchTerm } = this.state;
     const paginationOptions = {
-      type: attributeLabel,
+      key: attributeKey,
       search: searchTerm,
     };
     return (
       <div className={classes.container}>
-        <TagsAttributesMenu />
+        <LabelsAttributesMenu />
         {view === 'lines' ? this.renderLines(paginationOptions) : ''}
         <AttributeCreation
           paginationOptions={paginationOptions}
-          attributeType={attributeLabel}
+          attributeKey={attributeKey}
         />
       </div>
     );

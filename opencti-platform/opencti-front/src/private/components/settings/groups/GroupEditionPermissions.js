@@ -3,7 +3,7 @@ import * as PropTypes from 'prop-types';
 import graphql from 'babel-plugin-relay/macro';
 import { createFragmentContainer } from 'react-relay';
 import {
-  compose, map, pathOr, pipe, propEq, find,
+  compose, map, pathOr, pipe, propEq, find, filter,
 } from 'ramda';
 import { withStyles } from '@material-ui/core/styles';
 import List from '@material-ui/core/List';
@@ -32,7 +32,7 @@ const styles = (theme) => ({
 const groupMutationRelationAdd = graphql`
   mutation GroupEditionPermissionsMarkingDefinitionsRelationAddMutation(
     $id: ID!
-    $input: RelationAddInput!
+    $input: InternalRelationshipAddInput
   ) {
     groupEdit(id: $id) {
       relationAdd(input: $input) {
@@ -47,10 +47,11 @@ const groupMutationRelationAdd = graphql`
 const groupMutationRelationDelete = graphql`
   mutation GroupEditionPermissionsMarkingDefinitionsRelationDeleteMutation(
     $id: ID!
-    $relationId: ID!
+    $toId: String!
+    $relationship_type: String!
   ) {
     groupEdit(id: $id) {
-      relationDelete(relationId: $relationId) {
+      relationDelete(toId: $toId, relationship_type: $relationship_type) {
         ...GroupEditionPermissions_group
       }
     }
@@ -65,10 +66,8 @@ class GroupEditionPermissionsComponent extends Component {
         variables: {
           id: this.props.group.id,
           input: {
-            fromRole: 'allowed',
             toId: markingDefinitionId,
-            toRole: 'allow',
-            through: 'permission',
+            relationship_type: 'accesses-to',
           },
         },
       });
@@ -77,7 +76,8 @@ class GroupEditionPermissionsComponent extends Component {
         mutation: groupMutationRelationDelete,
         variables: {
           id: this.props.group.id,
-          relationId: groupMarkingDefinition.relation,
+          toId: markingDefinitionId,
+          relationship_type: 'accesses-to',
         },
       });
     }
@@ -85,16 +85,12 @@ class GroupEditionPermissionsComponent extends Component {
 
   render() {
     const { classes, group, t } = this.props;
-    const groupMarkingDefinitions = pipe(
-      pathOr([], ['permissions', 'edges']),
-      map((n) => ({ id: n.node.id, relation: n.relation.id })),
-    )(group);
-
+    const groupMarkingDefinitions = group.allowed_marking || [];
     return (
       <div style={{ paddingTop: 15 }}>
         <Alert severity="warning" style={{ marginBottom: 10 }}>
           {t(
-            'Groups permissions on data marking is not fully implemented yet.',
+            'Groups marking definitions will filter the stream consumer to only data he can access to.',
           )}
         </Alert>
         <QueryRenderer
@@ -106,6 +102,7 @@ class GroupEditionPermissionsComponent extends Component {
               const markingDefinitions = pipe(
                 pathOr([], ['markingDefinitions', 'edges']),
                 map((n) => n.node),
+                filter((n) => n.definition_type !== 'statement'),
               )(props);
               return (
                 <List dense={true} className={classes.root}>
@@ -159,17 +156,8 @@ const GroupEditionPermissions = createFragmentContainer(
     group: graphql`
       fragment GroupEditionPermissions_group on Group {
         id
-        permissions {
-          edges {
-            node {
-              id
-              definition
-              definition_type
-            }
-            relation {
-              id
-            }
-          }
+        allowed_marking {
+          id
         }
       }
     `,

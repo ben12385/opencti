@@ -1,14 +1,7 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import {
-  compose,
-  filter,
-  pipe,
-  split,
-  drop,
-  join,
-  pathOr,
-  propOr,
+  compose, filter, pipe, split, drop, join, propOr,
 } from 'ramda';
 import moment from 'moment';
 import { createFragmentContainer } from 'react-relay';
@@ -16,7 +9,11 @@ import graphql from 'babel-plugin-relay/macro';
 import { withStyles } from '@material-ui/core';
 import IconButton from '@material-ui/core/IconButton';
 import { FileOutline, ProgressUpload } from 'mdi-material-ui';
-import { DeleteOutlined, GetAppOutlined } from '@material-ui/icons';
+import {
+  DeleteOutlined,
+  GetAppOutlined,
+  WarningOutlined,
+} from '@material-ui/icons';
 import Tooltip from '@material-ui/core/Tooltip';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
@@ -24,7 +21,11 @@ import ListItem from '@material-ui/core/ListItem';
 import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import { Link } from 'react-router-dom';
-import { commitMutation, MESSAGING$ } from '../../../../relay/environment';
+import {
+  APP_BASE_PATH,
+  commitMutation,
+  MESSAGING$,
+} from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
 import FileWork from './FileWork';
 
@@ -49,13 +50,15 @@ const FileLineDeleteMutation = graphql`
 
 const FileLineAskDeleteMutation = graphql`
   mutation FileLineAskDeleteMutation($workId: ID!) {
-    deleteWork(id: $workId)
+    workEdit(id: $workId) {
+      delete
+    }
   }
 `;
 
 const FileLineImportAskJobMutation = graphql`
-  mutation FileLineImportAskJobMutation($fileName: ID!, $context: String) {
-    askJobImport(fileName: $fileName, context: $context) {
+  mutation FileLineImportAskJobMutation($fileName: ID!) {
+    askJobImport(fileName: $fileName) {
       ...FileLine_file
     }
   }
@@ -65,7 +68,7 @@ class FileLineComponent extends Component {
   askForImportJob() {
     commitMutation({
       mutation: FileLineImportAskJobMutation,
-      variables: { fileName: this.props.file.id, context: this.props.context },
+      variables: { fileName: this.props.file.id },
       onCompleted: () => {
         MESSAGING$.notifySuccess('Import successfully asked');
       },
@@ -111,15 +114,16 @@ class FileLineComponent extends Component {
       disableImport,
       directDownload,
     } = this.props;
-    const { lastModifiedSinceMin, uploadStatus } = file;
-    const isFail = uploadStatus === 'error' || uploadStatus === 'partial';
-    const isProgress = uploadStatus === 'progress';
+    const { lastModifiedSinceMin, uploadStatus, metaData } = file;
+    const { messages, errors } = metaData;
+    const isFail = errors.length > 0;
+    const isProgress = uploadStatus === 'progress' || uploadStatus === 'wait';
     const isOutdated = isProgress && lastModifiedSinceMin > 1;
     const isImportActive = () => connectors && filter((x) => x.data.active, connectors).length > 0;
     const fileName = propOr('', 'name', file).includes('_')
       ? pipe(split('_'), drop(1), join('_'))(file.name)
       : file.name;
-    const toolTip = pathOr('', ['metaData', 'listargs'], file);
+    const toolTip = [...messages, ...errors].map((s) => s.message).join(', ');
     return (
       <div>
         <ListItem
@@ -138,7 +142,11 @@ class FileLineComponent extends Component {
           rel="noopener noreferrer"
         >
           <ListItemIcon>
-            {isProgress ? <CircularProgress size={20} /> : <FileOutline />}
+            {isProgress && <CircularProgress size={20} />}
+            {!isProgress && isFail && (
+              <WarningOutlined style={{ fontSize: 15, color: '#f44336' }} />
+            )}
+            {!isProgress && !isFail && <FileOutline />}
           </ListItemIcon>
           <Tooltip title={toolTip !== 'null' ? toolTip : ''}>
             <ListItemText
@@ -151,10 +159,12 @@ class FileLineComponent extends Component {
             {!disableImport ? (
               <Tooltip title={t('Launch an import of this file')}>
                 <span>
-                  <IconButton disabled={isProgress || !isImportActive()}
+                  <IconButton
+                    disabled={isProgress || !isImportActive()}
                     onClick={this.askForImportJob.bind(this)}
                     aria-haspopup="true"
-                    color="primary">
+                    color="primary"
+                  >
                     <ProgressUpload />
                   </IconButton>
                 </span>
@@ -162,12 +172,12 @@ class FileLineComponent extends Component {
             ) : (
               ''
             )}
-            {!directDownload ? (
+            {!directDownload && !isFail ? (
               <Tooltip title={t('Download this file')}>
                 <span>
                   <IconButton
                     disabled={isProgress}
-                    href={`/storage/get/${file.id}`}
+                    href={`${APP_BASE_PATH}/storage/get/${file.id}`}
                     aria-haspopup="true"
                     color="primary"
                   >
@@ -219,7 +229,6 @@ FileLineComponent.propTypes = {
   dense: PropTypes.bool,
   disableImport: PropTypes.bool,
   directDownload: PropTypes.bool,
-  context: PropTypes.string,
 };
 
 const FileLine = createFragmentContainer(FileLineComponent, {
@@ -231,9 +240,16 @@ const FileLine = createFragmentContainer(FileLineComponent, {
       lastModified
       lastModifiedSinceMin
       metaData {
-        category
         mimetype
-        listargs
+        list_filters
+        messages {
+          timestamp
+          message
+        }
+        errors {
+          timestamp
+          message
+        }
       }
       ...FileWork_file
     }

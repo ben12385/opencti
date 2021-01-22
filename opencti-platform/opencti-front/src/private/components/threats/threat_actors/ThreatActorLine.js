@@ -8,9 +8,9 @@ import { withStyles } from '@material-ui/core/styles';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
-import { KeyboardArrowRight, Public } from '@material-ui/icons';
+import { KeyboardArrowRight, PublicOutlined } from '@material-ui/icons';
 import inject18n from '../../../../components/i18n';
-import StixObjectTags from '../../common/stix_object/StixObjectTags';
+import StixCoreObjectLabels from '../../common/stix_core_objects/StixCoreObjectLabels';
 
 const styles = (theme) => ({
   item: {
@@ -45,7 +45,7 @@ const styles = (theme) => ({
 class ThreatActorLineComponent extends Component {
   render() {
     const {
-      fd, classes, node, dataColumns, onTagClick,
+      fd, classes, node, dataColumns, onLabelClick,
     } = this.props;
     return (
       <ListItem
@@ -56,7 +56,7 @@ class ThreatActorLineComponent extends Component {
         to={`/dashboard/threats/threat_actors/${node.id}`}
       >
         <ListItemIcon classes={{ root: classes.itemIcon }}>
-          <Public />
+          <PublicOutlined />
         </ListItemIcon>
         <ListItemText
           primary={
@@ -69,12 +69,12 @@ class ThreatActorLineComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
-                style={{ width: dataColumns.tags.width }}
+                style={{ width: dataColumns.objectLabel.width }}
               >
-                <StixObjectTags
+                <StixCoreObjectLabels
                   variant="inList"
-                  tags={node.tags}
-                  onClick={onTagClick.bind(this)}
+                  labels={node.objectLabel}
+                  onClick={onLabelClick.bind(this)}
                 />
               </div>
               <div
@@ -106,7 +106,7 @@ ThreatActorLineComponent.propTypes = {
   classes: PropTypes.object,
   fd: PropTypes.func,
   t: PropTypes.func,
-  onTagClick: PropTypes.func,
+  onLabelClick: PropTypes.func,
 };
 
 const ThreatActorLineFragment = createFragmentContainer(
@@ -118,20 +118,16 @@ const ThreatActorLineFragment = createFragmentContainer(
         name
         created
         modified
-        tags {
+        objectLabel {
           edges {
             node {
               id
-              tag_type
               value
               color
             }
-            relation {
-              id
-            }
           }
         }
-        markingDefinitions {
+        objectMarking {
           edges {
             node {
               id
@@ -155,7 +151,7 @@ class ThreatActorLineDummyComponent extends Component {
     return (
       <ListItem classes={{ root: classes.item }} divider={true}>
         <ListItemIcon classes={{ root: classes.itemIconDisabled }}>
-          <Public />
+          <PublicOutlined />
         </ListItemIcon>
         <ListItemText
           primary={
@@ -168,7 +164,7 @@ class ThreatActorLineDummyComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
-                style={{ width: dataColumns.tags.width }}
+                style={{ width: dataColumns.objectLabel.width }}
               >
                 <div className="fakeItem" style={{ width: '90%' }} />
               </div>

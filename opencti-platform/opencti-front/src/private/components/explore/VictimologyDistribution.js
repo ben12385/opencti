@@ -3,10 +3,10 @@ import PropTypes from 'prop-types';
 import { compose, propOr, pathOr } from 'ramda';
 import { withStyles } from '@material-ui/core/styles';
 import inject18n from '../../../components/i18n';
-import EntityStixRelationsPie from '../common/stix_relations/EntityStixRelationsPie';
-import EntityStixRelationsRadar from '../common/stix_relations/EntityStixRelationsRadar';
-import EntityStixRelationsDonut from '../common/stix_relations/EntityStixRelationsDonut';
-import EntityStixRelationsTable from '../common/stix_relations/EntityStixRelationsTable';
+import EntityStixCoreRelationshipsPie from '../common/stix_core_relationships/EntityStixCoreRelationshipsPie';
+import EntityStixCoreRelationshipsRadar from '../common/stix_core_relationships/StixCoreObjectStixCoreRelationshipsCloud';
+import EntityStixCoreRelationshipsDonut from '../common/stix_core_relationships/EntityStixCoreRelationshipsDonut';
+import EntityStixCoreRelationshipsTable from '../common/stix_core_relationships/EntityStixCoreRelationshipsTable';
 
 const styles = () => ({
   container: {
@@ -17,72 +17,64 @@ const styles = () => ({
 class VictimologyDistribution extends Component {
   render() {
     const {
-      configuration,
-      handleOpenConfig,
-      inferred,
-      startDate,
-      endDate,
+      configuration, handleOpenConfig, startDate, endDate,
     } = this.props;
     switch (configuration.graph_type) {
       case 'table':
         return (
-          <EntityStixRelationsTable
+          <EntityStixCoreRelationshipsTable
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
             entityType={propOr('Sector', 'entity_type', configuration)}
-            relationType="targets"
+            relationshipType="targets"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
         );
       case 'radar':
         return (
-          <EntityStixRelationsRadar
+          <EntityStixCoreRelationshipsRadar
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
             entityType={propOr('Sector', 'entity_type', configuration)}
-            relationType="targets"
+            relationshipType="targets"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
         );
       case 'donut':
         return (
-          <EntityStixRelationsDonut
+          <EntityStixCoreRelationshipsDonut
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
             entityType={propOr('Sector', 'entity_type', configuration)}
-            relationType="targets"
+            relationshipType="targets"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
         );
       default:
         return (
-          <EntityStixRelationsPie
+          <EntityStixCoreRelationshipsPie
             variant="explore"
             configuration={configuration}
             handleOpenConfig={handleOpenConfig.bind(this)}
             title={propOr('Widget', 'title', configuration)}
             entityId={pathOr(null, ['entity', 'id'], configuration)}
-            relationType="targets"
+            relationshipType="targets"
             field="name"
-            inferred={inferred}
             startDate={startDate}
             endDate={endDate}
           />
@@ -94,7 +86,6 @@ class VictimologyDistribution extends Component {
 VictimologyDistribution.propTypes = {
   configuration: PropTypes.object,
   handleOpenConfig: PropTypes.func,
-  inferred: PropTypes.bool,
   startDate: PropTypes.string,
   endDate: PropTypes.string,
   classes: PropTypes.object,

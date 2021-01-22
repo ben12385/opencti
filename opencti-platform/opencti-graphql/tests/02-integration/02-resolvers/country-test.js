@@ -1,5 +1,6 @@
 import gql from 'graphql-tag';
 import { queryAsAdmin } from '../../utils/testQuery';
+import { elLoadByIds } from '../../../src/database/elasticSearch';
 
 const LIST_QUERY = gql`
   query countries(
@@ -35,10 +36,12 @@ const READ_QUERY = gql`
   query country($id: String!) {
     country(id: $id) {
       id
+      standard_id
       name
       description
       region {
         id
+        standard_id
       }
       toStix
     }
@@ -47,7 +50,6 @@ const READ_QUERY = gql`
 
 describe('Country resolver standard behavior', () => {
   let countryInternalId;
-  let countryMarkingDefinitionRelationId;
   const countryStixId = 'identity--93b1ee77-79d0-461d-8096-7c83b7a77646';
   it('should country created', async () => {
     const CREATE_QUERY = gql`
@@ -63,7 +65,7 @@ describe('Country resolver standard behavior', () => {
     const COUNTRY_TO_CREATE = {
       input: {
         name: 'Country',
-        stix_id_key: countryStixId,
+        stix_id: countryStixId,
         description: 'Country description',
       },
     };
@@ -89,15 +91,16 @@ describe('Country resolver standard behavior', () => {
     expect(queryResult.data.country.id).toEqual(countryInternalId);
   });
   it('should country region be accurate', async () => {
+    const country = await elLoadByIds('location--5acd8b26-51c2-4608-86ed-e9edd43ad971');
     const queryResult = await queryAsAdmin({
       query: READ_QUERY,
-      variables: { id: 'f2ea7d37-996d-4313-8f73-42a8782d39a0' },
+      variables: { id: country.internal_id },
     });
     expect(queryResult).not.toBeNull();
     expect(queryResult.data.country).not.toBeNull();
-    expect(queryResult.data.country.id).toEqual('f2ea7d37-996d-4313-8f73-42a8782d39a0');
+    expect(queryResult.data.country.standard_id).toEqual('location--57dbce2d-8b33-5671-aada-05850948ed30');
     expect(queryResult.data.country.region).not.toBeNull();
-    expect(queryResult.data.country.region.id).toEqual('ccbbd430-f264-4dae-b4db-d5c02e1edeb7');
+    expect(queryResult.data.country.region.standard_id).toEqual('location--5f92df88-37cd-5060-9aa8-bc58053a572b');
   });
   it('should list countries', async () => {
     const queryResult = await queryAsAdmin({ query: LIST_QUERY, variables: { first: 10 } });
@@ -154,18 +157,15 @@ describe('Country resolver standard behavior', () => {
   });
   it('should add relation in country', async () => {
     const RELATION_ADD_QUERY = gql`
-      mutation CountryEdit($id: ID!, $input: RelationAddInput!) {
+      mutation CountryEdit($id: ID!, $input: StixMetaRelationshipAddInput!) {
         countryEdit(id: $id) {
           relationAdd(input: $input) {
             id
             from {
               ... on Country {
-                markingDefinitions {
+                objectMarking {
                   edges {
                     node {
-                      id
-                    }
-                    relation {
                       id
                     }
                   }
@@ -181,24 +181,20 @@ describe('Country resolver standard behavior', () => {
       variables: {
         id: countryInternalId,
         input: {
-          fromRole: 'so',
-          toRole: 'marking',
-          toId: '43f586bc-bcbc-43d1-ab46-43e5ab1a2c46',
-          through: 'object_marking_refs',
+          toId: 'marking-definition--78ca4366-f5b8-4764-83f7-34ce38198e27',
+          relationship_type: 'object-marking',
         },
       },
     });
-    expect(queryResult.data.countryEdit.relationAdd.from.markingDefinitions.edges.length).toEqual(1);
-    countryMarkingDefinitionRelationId =
-      queryResult.data.countryEdit.relationAdd.from.markingDefinitions.edges[0].relation.id;
+    expect(queryResult.data.countryEdit.relationAdd.from.objectMarking.edges.length).toEqual(1);
   });
   it('should delete relation in country', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation CountryEdit($id: ID!, $relationId: ID!) {
+      mutation CountryEdit($id: ID!, $toId: String!, $relationship_type: String!) {
         countryEdit(id: $id) {
-          relationDelete(relationId: $relationId) {
+          relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id
-            markingDefinitions {
+            objectMarking {
               edges {
                 node {
                   id
@@ -213,10 +209,11 @@ describe('Country resolver standard behavior', () => {
       query: RELATION_DELETE_QUERY,
       variables: {
         id: countryInternalId,
-        relationId: countryMarkingDefinitionRelationId,
+        toId: 'marking-definition--78ca4366-f5b8-4764-83f7-34ce38198e27',
+        relationship_type: 'object-marking',
       },
     });
-    expect(queryResult.data.countryEdit.relationDelete.markingDefinitions.edges.length).toEqual(0);
+    expect(queryResult.data.countryEdit.relationDelete.objectMarking.edges.length).toEqual(0);
   });
   it('should country deleted', async () => {
     const DELETE_QUERY = gql`

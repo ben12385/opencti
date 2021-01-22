@@ -9,7 +9,8 @@ import { authentication } from '../domain/user';
 import { UnknownError, ValidationError } from '../config/errors';
 import loggerPlugin from './loggerPlugin';
 
-const extractTokenFromBearer = (bearer) => (bearer && bearer.length > 10 ? bearer.substring('Bearer '.length) : null);
+export const extractTokenFromBearer = (bearer) =>
+  bearer && bearer.length > 10 ? bearer.substring('Bearer '.length) : null;
 const createApolloServer = () => {
   return new ApolloServer({
     schema: createSchema(),
@@ -24,7 +25,16 @@ const createApolloServer = () => {
       let token = req.cookies ? req.cookies[OPENCTI_TOKEN] : null;
       token = token || extractTokenFromBearer(req.headers.authorization);
       const auth = await authentication(token);
-      return { res, user: auth };
+      if (!auth) return { res, user: auth };
+      const origin = {
+        ip: req.ip,
+        user_id: auth.id,
+        applicant_id: req.headers['opencti-applicant-id'],
+        call_retry_number: req.headers['opencti-retry-number'],
+      };
+      const workId = req.headers['opencti-work-id'];
+      const authMeta = { ...auth, origin };
+      return { res, user: authMeta, workId };
     },
     tracing: DEV_MODE,
     plugins: [loggerPlugin],

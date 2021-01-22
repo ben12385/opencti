@@ -72,11 +72,11 @@ class RelationNodeWidget extends Component {
     return (
       <Tooltip
         title={
-          extras.first_seen ? (
+          extras.start_time ? (
             <span>
-              {t('First obs.')} {nsd(extras.first_seen)}
+              {t('First obs.')} {nsd(extras.start_time)}
               <br />
-              {t('Last obs.')} {nsd(extras.last_seen)}
+              {t('Last obs.')} {nsd(extras.stop_time)}
             </span>
           ) : (
             ''
@@ -91,7 +91,7 @@ class RelationNodeWidget extends Component {
           }}
         >
           <div className={classes.label}>
-            <strong>{t(`relation_${extras.type}`)}</strong>
+            <strong>{t(`relationship_${extras.type}`)}</strong>
           </div>
           <div
             className={classes.port}
@@ -133,7 +133,4 @@ RelationNodeWidget.propTypes = {
   nsd: PropTypes.func,
 };
 
-export default compose(
-  inject18n,
-  withStyles(styles),
-)(RelationNodeWidget);
+export default compose(inject18n, withStyles(styles))(RelationNodeWidget);

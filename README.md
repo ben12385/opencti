@@ -3,12 +3,11 @@
 </h1>
 <p align="center">
   <a href="https://www.opencti.io" alt="Website"><img src="https://img.shields.io/badge/website-opencti.io-blue.svg" /></a>
-  <a href="https://www.notion.so/luatix/OpenCTI-Public-Knowledge-Base-d411e5e477734c59887dad3649f20518" alt="Documentation"><img src="https://img.shields.io/badge/Documentation-RTFM-orange.svg" /></a>
+  <a href="https://www.notion.so/luatix/OpenCTI-Public-Knowledge-Base-d411e5e477734c59887dad3649f20518" alt="Documentation"><img src="https://img.shields.io/badge/Documentation-Notion-orange.svg" /></a>
   <a href="https://slack.luatix.org" alt="Slack"><img src="https://slack.luatix.org/badge.svg" /></a>
   <a href="https://cloud.drone.io/OpenCTI-Platform/opencti"><img src="https://cloud.drone.io/api/badges/OpenCTI-Platform/opencti/status.svg" /></a>
   <a href="https://codecov.io/gh/OpenCTI-Platform/opencti"><img src="https://codecov.io/gh/OpenCTI-Platform/opencti/graph/badge.svg" /></a>
   <a href="https://deepscan.io/dashboard#view=project&tid=4926&pid=6716&bid=57311"><img src="https://deepscan.io/api/teams/4926/projects/6716/branches/57311/badge/grade.svg" alt="DeepScan grade"></a>
-  <a href="https://github.com/OpenCTI-Platform/opencti/releases/latest" alt="Releases"><img src="https://img.shields.io/github/release/OpenCTI-Platform/opencti.svg" /></a>
   <a href="https://hub.docker.com/u/opencti" alt="Docker pulls"><img src="https://img.shields.io/docker/pulls/opencti/platform" /></a>
 </p>
 
@@ -18,23 +17,23 @@ OpenCTI is an open source platform allowing organizations to manage their cyber 
 
 The structuration of the data is performed using a knowledge schema based on the [STIX2 standards](https://oasis-open.github.io/cti-documentation/). It has been designed as a modern web application including a [GraphQL API](https://graphql.org) and an UX oriented frontend. Also, OpenCTI can be integrated with other tools and applications such as [MISP](https://github.com/MISP/MISP), [TheHive](https://github.com/TheHive-Project/TheHive), [MITRE ATT&CK](https://github.com/mitre/cti), etc.
 
-![Screenshot](https://www.opencti.io/wp-content/uploads/2020/05/github-screenshot.png "Screenshot")
+![Screenshot](https://www.opencti.io/wp-content/uploads/2021/01/github_screenshot.png "Screenshot")
 
 ## Objective
 
-The goal is to create a comprehensive tool allowing users to capitalize technical (such as TTPs and observables) and non-technical information (such as suggested attribution, victimlogy etc.) while linking each piece of information to its primary source (a report, a MISP event, etc.), with features such as links between each information, first and last seen dates, levels of confidence etc. The tool is able to use the [MITRE ATT&CK framework](https://attack.mitre.org) (through a [dedicated connector](https://github.com/OpenCTI-Platform/connectors)) to help structure the data. The user can also chose to implement its own datasets.
+The goal is to create a comprehensive tool allowing users to capitalize technical (such as TTPs and observables) and non-technical information (such as suggested attribution, victimology etc.) while linking each piece of information to its primary source (a report, a MISP event, etc.), with features such as links between each information, first and last seen dates, levels of confidence, etc. The tool is able to use the [MITRE ATT&CK framework](https://attack.mitre.org) (through a [dedicated connector](https://github.com/OpenCTI-Platform/connectors)) to help structure the data. The user can also choose to implement their own datasets.
 
-Once data has been capitalized and processed by the analysts within OpenCTI, new relations [may be inferred](https://www.notion.so/luatix/Relations-8313e7bbec8b4c9397099f84d5e78b27#def25059b54740a789bc848dcfb8d526) from existing ones to facilitate the understanding and the representation of this information. This allow the user to extract and leverage meaningful knowledge from the raw data.
+Once data has been capitalized and processed by the analysts within OpenCTI, new relations [may be inferred](https://www.notion.so/luatix/Relations-8313e7bbec8b4c9397099f84d5e78b27#def25059b54740a789bc848dcfb8d526) from existing ones to facilitate the understanding and the representation of this information. This allows the user to extract and leverage meaningful knowledge from the raw data.
 
-OpenCTI not only allows [imports](https://www.notion.so/luatix/Import-Export-7dc143dfbb6147b0881080487ed9db33#4ffd142e88ad489abc3370ea8f738a82) but also [exports of data](https://www.notion.so/luatix/Import-Export-7dc143dfbb6147b0881080487ed9db33#8dfec135e334415fb18f1f169fe89804) under different formats (CSV, STIX2 bundles, etc.). [Connectors](https://www.notion.so/luatix/OpenCTI-Ecosystem-868329e9fb734fca89692b2ed6087e76) are currently developped to accelerate interactions between the tool and other platforms.
+OpenCTI not only allows [imports](https://www.notion.so/luatix/Import-Export-7dc143dfbb6147b0881080487ed9db33#4ffd142e88ad489abc3370ea8f738a82) but also [exports of data](https://www.notion.so/luatix/Import-Export-7dc143dfbb6147b0881080487ed9db33#8dfec135e334415fb18f1f169fe89804) under different formats (CSV, STIX2 bundles, etc.). [Connectors](https://www.notion.so/luatix/OpenCTI-Ecosystem-868329e9fb734fca89692b2ed6087e76) are currently developed to accelerate interactions between the tool and other platforms.
 
 ## Documentation and demonstration
 
-If you want to know more on OpenCTI, you can read the [documentation on the tool](https://www.notion.so/luatix/OpenCTI-Public-Knowledge-Base-d411e5e477734c59887dad3649f20518). If you wish to discover how the OpenCTI platform is working, a [demonstration instance](https://demo.opencti.io) is available and open to everyone. This instance is reset every night and is based on reference data maintened by the OpenCTI developers.
+If you want to know more on OpenCTI, you can read the [documentation on the tool](https://www.notion.so/luatix/OpenCTI-Public-Knowledge-Base-d411e5e477734c59887dad3649f20518). If you wish to discover how the OpenCTI platform is working, a [demonstration instance](https://demo.opencti.io) is available and open to everyone. This instance is reset every night and is based on reference data maintained by the OpenCTI developers.
 
 ## Releases download
 
-The releases are available on the [Github releases page](https://github.com/OpenCTI-Platform/opencti/releases). You can also access to the [rolling release package](https://releases.opencti.io) generated from the mater branch of the repository.
+The releases are available on the [Github releases page](https://github.com/OpenCTI-Platform/opencti/releases). You can also access the [rolling release package](https://releases.opencti.io) generated from the mater branch of the repository.
 
 ## Installation
 
@@ -43,6 +42,22 @@ All you need to install the OpenCTI platform can be found in the [official docum
 * [Deploy the VM template](https://www.notion.so/luatix/Virtual-machine-template-1789b4442b414dbf87f748db51c85aa5) (recommended)
 * [Use Docker](https://www.notion.so/luatix/Using-Docker-03d5c0592b9d4547800cc9f4ff7be2b8) (recommended)
 * [Install manually](https://www.notion.so/luatix/Manual-deployment-b911beba44234f179841582ab3894bb1)
+
+## Luatix's members
+
+### Founders
+
+<p align="left">
+  <a href="https://www.ssi.gouv.fr" alt="ANSSI"><img src="https://www.luatix.org/wp-content/uploads/2020/04/Anssi.png" width="80" /></a>
+  <a href="https://cert.europa.eu" alt="CERT-EU"><img src="https://www.luatix.org/wp-content/uploads/2020/04/Certeu.png" width="83" /></a>
+</p>
+
+### Sponsors
+
+<p align="left">
+  <a href="https://www.intrinsec.com" alt="Intrinsec"><img src="https://www.luatix.org/wp-content/uploads/2020/12/intrinsec.png" width="80" /></a>
+  <a href="https://www.thalesgroup.com" alt="Thales"><img src="https://www.luatix.org/wp-content/uploads/2020/04/Thales.png" width="80" /></a>
+</p>
 
 ## Contributing
 

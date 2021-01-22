@@ -1,602 +1,509 @@
-import { assoc, head, includes, isEmpty, map, pipe } from 'ramda';
+import * as R from 'ramda';
+import { version as uuidVersion } from 'uuid';
+import uuidTime from 'uuid-time';
 import { FunctionalError } from '../config/errors';
+import {
+  ENTITY_TYPE_ATTACK_PATTERN,
+  ENTITY_TYPE_CAMPAIGN,
+  ENTITY_TYPE_CONTAINER_OBSERVED_DATA,
+  ENTITY_TYPE_COURSE_OF_ACTION,
+  ENTITY_TYPE_IDENTITY_INDIVIDUAL,
+  ENTITY_TYPE_IDENTITY_ORGANIZATION,
+  ENTITY_TYPE_IDENTITY_SECTOR,
+  ENTITY_TYPE_INDICATOR,
+  ENTITY_TYPE_INFRASTRUCTURE,
+  ENTITY_TYPE_INTRUSION_SET,
+  ENTITY_TYPE_LOCATION_CITY,
+  ENTITY_TYPE_LOCATION_COUNTRY,
+  ENTITY_TYPE_LOCATION_POSITION,
+  ENTITY_TYPE_LOCATION_REGION,
+  ENTITY_TYPE_MALWARE,
+  ENTITY_TYPE_THREAT_ACTOR,
+  ENTITY_TYPE_TOOL,
+  ENTITY_TYPE_VULNERABILITY,
+  isStixDomainObjectIdentity,
+  isStixDomainObjectLocation,
+} from '../schema/stixDomainObject';
+import {
+  ENTITY_DOMAIN_NAME,
+  ENTITY_HASHED_OBSERVABLE_STIX_FILE,
+  ENTITY_IPV4_ADDR,
+  ENTITY_IPV6_ADDR,
+  ENTITY_URL,
+  isStixCyberObservable,
+} from '../schema/stixCyberObservable';
+import {
+  isStixInternalMetaRelationship,
+  isStixMetaRelationship,
+  RELATION_CREATED_BY,
+} from '../schema/stixMetaRelationship';
+import { isStixObject } from '../schema/stixCoreObject';
+import {
+  isStixCoreRelationship,
+  RELATION_ATTRIBUTED_TO,
+  RELATION_BASED_ON,
+  RELATION_COMMUNICATES_WITH,
+  RELATION_COMPROMISES,
+  RELATION_CONSISTS_OF,
+  RELATION_CONTROLS,
+  RELATION_DELIVERS,
+  RELATION_HAS,
+  RELATION_HOSTS,
+  RELATION_INDICATES,
+  RELATION_INVESTIGATES,
+  RELATION_LOCATED_AT,
+  RELATION_MITIGATES,
+  RELATION_ORIGINATES_FROM,
+  RELATION_PART_OF,
+  RELATION_RELATED_TO,
+  RELATION_REVOKED_BY,
+  RELATION_SUBTECHNIQUE_OF,
+  RELATION_TARGETS,
+  RELATION_USES,
+} from '../schema/stixCoreRelationship';
+import { isStixSightingRelationship } from '../schema/stixSightingRelationship';
+import { isStixCyberObservableRelationship } from '../schema/stixCyberObservableRelationship';
+import { isMultipleAttribute } from '../schema/fieldDataAdapter';
+import { ABSTRACT_STIX_CYBER_OBSERVABLE } from '../schema/general';
 
+const MAX_TRANSIENT_STIX_IDS = 200;
 export const STIX_SPEC_VERSION = '2.1';
-export const OBSERVABLE_TYPES = [
-  'autonomous-system',
-  'cryptographic-key',
-  'cryptocurrency-wallet',
-  'directory',
-  'domain',
-  'email-address',
-  'email-subject',
-  'file-name',
-  'file-path',
-  'file-md5',
-  'file-sha1',
-  'file-sha256',
-  'hostname',
-  'ipv4-addr',
-  'ipv6-addr',
-  'mac-addr',
-  'mutex',
-  'pdb-path',
-  'process',
-  'registry-key',
-  'registry-key-value',
-  'text',
-  'url',
-  'user-account',
-  'user-agent',
-  'windows-service-name',
-  'windows-service-display-name',
-  'windows-scheduled-task',
-  'x509-certificate-issuer',
-  'x509-certificate-serial-number',
-  'unknown',
-];
-export const IDENTITY_TYPES = ['sector', 'user', 'organization', 'city', 'country', 'region'];
 
-const isNotEmpty = (value) => {
-  if (isEmpty(value)) {
-    return false;
+export const convertTypeToStixType = (type) => {
+  if (isStixDomainObjectIdentity(type)) {
+    return 'identity';
   }
-  return !(Array.isArray(value) && head(value).length === 0);
+  if (isStixDomainObjectLocation(type)) {
+    return 'location';
+  }
+  if (type === ENTITY_HASHED_OBSERVABLE_STIX_FILE) {
+    return 'file';
+  }
+  if (isStixCoreRelationship(type)) {
+    return 'relationship';
+  }
+  return type.toLowerCase();
 };
 
-export const buildStixData = (baseData, entityData, associationMap) => {
-  const finalData = baseData;
-  // eslint-disable-next-line no-restricted-syntax
-  for (const [key, value] of Object.entries(associationMap)) {
-    if (entityData[key] && isNotEmpty(entityData[key])) {
-      finalData[value] = entityData[key];
+const BASIC_FIELDS = [
+  'id',
+  'x_opencti_id',
+  'type',
+  'spec_version',
+  'source_ref',
+  'x_opencti_source_ref',
+  'target_ref',
+  'x_opencti_target_ref',
+  'start_time',
+  'stop_time',
+  'hashes',
+];
+export const stixDataConverter = (data) => {
+  let finalData = data;
+  // Relationships
+  if (finalData.from) {
+    finalData = R.pipe(
+      R.dissoc('from'),
+      R.assoc('source_ref', data.from.standard_id),
+      R.assoc('x_opencti_source_ref', data.from.internal_id)
+    )(finalData);
+  }
+  if (finalData.to) {
+    finalData = R.pipe(
+      R.dissoc('to'),
+      R.assoc('target_ref', data.to.standard_id),
+      R.assoc('x_opencti_target_ref', data.to.internal_id)
+    )(finalData);
+  }
+  // Specific input cases
+  if (finalData.stix_id) {
+    finalData = R.pipe(R.dissoc('stix_id'), R.assoc('x_opencti_stix_ids', [data.stix_id]))(finalData);
+  } else {
+    finalData = R.dissoc('stix_id', finalData);
+  }
+  // Inner relations
+  if (finalData.object) {
+    const objectSet = Array.isArray(finalData.object) ? finalData.object : [finalData.object];
+    const objects = R.map((m) => m.standard_id, objectSet);
+    finalData = R.pipe(R.dissoc('object'), R.assoc('object_refs', objects))(finalData);
+  } else {
+    finalData = R.dissoc('object', finalData);
+  }
+  if (finalData.objectMarking) {
+    const markingSet = Array.isArray(finalData.objectMarking) ? finalData.objectMarking : [finalData.objectMarking];
+    const markings = R.map((m) => m.standard_id, markingSet);
+    finalData = R.pipe(R.dissoc('objectMarking'), R.assoc('object_marking_refs', markings))(finalData);
+  } else {
+    finalData = R.dissoc('objectMarking', finalData);
+  }
+  if (finalData.createdBy) {
+    const creator = Array.isArray(finalData.createdBy) ? R.head(finalData.createdBy) : finalData.createdBy;
+    finalData = R.pipe(R.dissoc('createdBy'), R.assoc('created_by_ref', creator.standard_id))(finalData);
+  } else {
+    finalData = R.dissoc('createdBy', finalData);
+  }
+  // Embedded relations
+  if (finalData.objectLabel) {
+    const labelSet = Array.isArray(finalData.objectLabel) ? finalData.objectLabel : [finalData.objectLabel];
+    const labels = R.map((m) => m.value, labelSet);
+    finalData = R.pipe(R.dissoc('objectLabel'), R.assoc('labels', labels))(finalData);
+  } else {
+    finalData = R.dissoc('objectLabel', finalData);
+  }
+  if (finalData.killChainPhases) {
+    const killSet = Array.isArray(finalData.killChainPhases) ? finalData.killChainPhases : [finalData.killChainPhases];
+    const kills = R.map((k) => R.pick(['kill_chain_name', 'phase_name'], k), killSet);
+    finalData = R.pipe(R.dissoc('killChainPhases'), R.assoc('kill_chain_phases', kills))(finalData);
+  } else {
+    finalData = R.dissoc('killChainPhases', finalData);
+  }
+  if (finalData.externalReferences) {
+    const externalSet = Array.isArray(finalData.externalReferences)
+      ? finalData.externalReferences
+      : [finalData.externalReferences];
+    const externals = R.map(
+      (e) => R.pick(['source_name', 'description', 'url', 'hashes', 'external_id'], e),
+      externalSet
+    );
+    finalData = R.pipe(R.dissoc('externalReferences'), R.assoc('external_references', externals))(finalData);
+  } else {
+    finalData = R.dissoc('externalReferences', finalData);
+  }
+  // Final filtering
+  const filteredData = {};
+  const entries = Object.entries(finalData);
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, val] = entries[index];
+    if (key.startsWith('i_') || key === 'x_opencti_graph_data' || val === null) {
+      // Internal opencti attributes.
+    } else if (key.startsWith('attribute_')) {
+      // Stix but reserved keywords
+      const targetKey = key.replace('attribute_', '');
+      filteredData[targetKey] = val;
+    } else if (!isMultipleAttribute(key) && !key.endsWith('_refs')) {
+      filteredData[key] = Array.isArray(val) ? R.head(val) : val;
+    } else {
+      filteredData[key] = val;
     }
+  }
+  return filteredData;
+};
+export const buildStixData = (data, onlyBase = false) => {
+  const type = data.entity_type;
+  // general
+  const rawData = R.pipe(
+    R.assoc('id', data.standard_id),
+    R.assoc('x_opencti_id', data.internal_id),
+    R.assoc('type', convertTypeToStixType(type)),
+    R.dissoc('_index'),
+    R.dissoc('standard_id'),
+    R.dissoc('internal_id'),
+    R.dissoc('parent_types'),
+    R.dissoc('base_type'),
+    R.dissoc('entity_type'),
+    R.dissoc('update'),
+    // Relations
+    R.dissoc('fromId'),
+    R.dissoc('fromRole'),
+    R.dissoc('fromType'),
+    R.dissoc('toId'),
+    R.dissoc('toRole'),
+    R.dissoc('toType'),
+    R.dissoc('connections')
+  )(data);
+  const stixData = stixDataConverter(rawData);
+  if (onlyBase) {
+    return R.pick(BASIC_FIELDS, stixData);
+  }
+  return stixData;
+};
+
+export const convertStixMetaRelationshipToStix = (data) => {
+  const entityType = data.entity_type;
+  let finalData = buildStixData(data.from, true);
+  if (isStixInternalMetaRelationship(entityType)) {
+    finalData = R.assoc(entityType.replace('-', '_'), [buildStixData(data.to)], finalData);
+  } else {
+    finalData = R.assoc(
+      `${entityType.replace('-', '_')}_ref${entityType !== RELATION_CREATED_BY ? 's' : ''}`,
+      entityType !== RELATION_CREATED_BY ? [data.to.standard_id] : data.to.standard_id,
+      finalData
+    );
   }
   return finalData;
 };
 
-export const markingDefinitionsToStix = (markingDefinitionsEdges) =>
-  map((markingDefinition) => markingDefinition.node.stix_id_key, markingDefinitionsEdges);
-
-export const externalReferencesToStix = (externalReferencesEdges) =>
-  map(
-    (externalReference) =>
-      buildStixData({}, externalReference.node, { source_name: 'source_name', external_id: 'external_id', url: 'url' }),
-    externalReferencesEdges
-  );
-
-export const tagsToStix = (tagsEdges) =>
-  map((tag) => buildStixData({}, tag.node, { tag_type: 'tag_type', value: 'value', color: 'color' }), tagsEdges);
-
-export const killChainPhasesToStix = (killChainPhasesEdges) =>
-  map(
-    (killChainPhase) =>
-      buildStixData({}, killChainPhase.node, { kill_chain_name: 'kill_chain_name', phase_name: 'phase_name' }),
-    killChainPhasesEdges
-  );
-
-export const objectRefsToStix = (objectRefsEdges) => map((objectRef) => objectRef.node.stix_id_key, objectRefsEdges);
-
-export const markingDefinitionToStix = (markingDefinition, onlyBase = false) => {
-  const baseData = {
-    id: markingDefinition.stix_id_key,
-    x_opencti_id: markingDefinition.id,
-    type: 'marking-definition',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, markingDefinition, {
-    definition_type: 'definition_type',
-    definition: 'definition',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'x_opencti_modified',
-  });
+export const convertStixCyberObservableRelationshipToStix = (data) => {
+  const entityType = data.entity_type;
+  let finalData = buildStixData(data.from, true);
+  finalData = R.assoc(`${entityType.replace('-', '_')}_ref`, data.to.standard_id, finalData);
+  return finalData;
 };
 
-export const attackPatternToStix = (attackPattern, onlyBase = false) => {
-  const baseData = {
-    id: attackPattern.stix_id_key,
-    x_opencti_id: attackPattern.id,
-    type: 'attack-pattern',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, attackPattern, {
-    name: 'name',
-    alias: 'aliases',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    platform: 'x_mitre_platforms',
-    required_permission: 'x_mitre_permissions_required',
-  });
-};
-
-export const campaignToStix = async (campaign, onlyBase = false) => {
-  const baseData = {
-    id: campaign.stix_id_key,
-    x_opencti_id: campaign.id,
-    type: 'campaign',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, campaign, {
-    name: 'name',
-    aliases: 'aliases',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    objective: 'objective',
-    first_seen: 'x_opencti_first_seen',
-    last_seen: 'x_opencti_last_seen',
-  });
-};
-
-export const courseOfActionToStix = async (courseOfAction, onlyBase = false) => {
-  const baseData = {
-    id: courseOfAction.stix_id_key,
-    x_opencti_id: courseOfAction.id,
-    type: 'course-of-action',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, courseOfAction, {
-    name: 'name',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    alias: 'x_opencti_aliases',
-  });
-};
-
-export const identityToStix = async (identity, onlyBase = false) => {
-  let identityClass = 'organization';
-  if (identity.entity_type === 'user') {
-    identityClass = 'individual';
-  } else if (identity.entity_type === 'sector') {
-    identityClass = 'class';
-  }
-  const baseData = {
-    id: identity.stix_id_key,
-    x_opencti_id: identity.id,
-    type: 'identity',
-    spec_version: STIX_SPEC_VERSION,
-    identity_class: identityClass,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, identity, {
-    name: 'name',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    entity_type: 'x_opencti_identity_type',
-    alias: 'x_opencti_aliases',
-  });
-};
-
-export const incidentToStix = async (incident, onlyBase = false) => {
-  const baseData = {
-    id: incident.stix_id_key,
-    x_opencti_id: incident.id,
-    type: 'x-opencti-incident',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, incident, {
-    name: 'name',
-    alias: 'aliases',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    objective: 'objective',
-    first_seen: 'first_seen',
-    last_seen: 'last_seen',
-  });
-};
-
-export const indicatorToStix = async (indicator, onlyBase = false) => {
-  const baseData = {
-    id: indicator.stix_id_key,
-    x_opencti_id: indicator.id,
-    type: 'indicator',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, indicator, {
-    name: 'name',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    pattern_type: 'pattern_type',
-    indicator_pattern: 'pattern',
-    valid_from: 'valid_from',
-    valid_until: 'valid_until',
-    alias: 'x_opencti_aliases',
-  });
-};
-
-export const intrusionSetToStix = async (intrusionSet, onlyBase = false) => {
-  const baseData = {
-    id: intrusionSet.stix_id_key,
-    x_opencti_id: intrusionSet.id,
-    type: 'intrusion-set',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, intrusionSet, {
-    name: 'name',
-    alias: 'aliases',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    goal: 'goals',
-    sophistication: 'sophistication',
-    resource_level: 'resource_level',
-    primary_motivation: 'primary_motivation',
-    secondary_motivation: 'secondary_motivations',
-    first_seen: 'x_opencti_first_seen',
-    last_seen: 'x_opencti_last_seen',
-  });
-};
-
-export const malwareToStix = async (malware, onlyBase = false) => {
-  const baseData = {
-    id: malware.stix_id_key,
-    x_opencti_id: malware.id,
-    type: 'malware',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, malware, {
-    name: 'name',
-    alias: 'aliases',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-  });
-};
-
-export const noteToStix = async (note, onlyBase = false) => {
-  const baseData = {
-    id: note.stix_id_key,
-    x_opencti_id: note.id,
-    type: 'note',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, note, {
-    description: 'abstract',
-    content: 'content',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    name: 'x_opencti_name',
-    alias: 'x_opencti_aliases',
-    graph_data: 'x_opencti_graph_data',
-  });
-};
-
-export const opinionToStix = async (opinion, onlyBase = false) => {
-  const baseData = {
-    id: opinion.stix_id_key,
-    x_opencti_id: opinion.id,
-    type: 'opinion',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, opinion, {
-    explanation: 'explanation',
-    description: 'opinion',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    name: 'x_opencti_name',
-    alias: 'x_opencti_aliases',
-    graph_data: 'x_opencti_graph_data',
-  });
-};
-
-export const reportToStix = async (report, onlyBase = false) => {
-  const baseData = {
-    id: report.stix_id_key,
-    x_opencti_id: report.id,
-    type: 'report',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, report, {
-    name: 'name',
-    description: 'description',
-    published: 'published',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    report_class: 'x_opencti_report_class',
-    object_status: 'x_opencti_object_status',
-    source_confidence_level: 'x_opencti_source_confidence_level',
-    alias: 'x_opencti_aliases',
-    graph_data: 'x_opencti_graph_data',
-  });
-};
-
-export const threatActorToStix = async (threatActor, onlyBase = false) => {
-  const baseData = {
-    id: threatActor.stix_id_key,
-    x_opencti_id: threatActor.id,
-    type: 'threat-actor',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, threatActor, {
-    name: 'name',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    sophistication: 'sophistication',
-    resource_level: 'resource_level',
-    primary_motivation: 'primary_motivation',
-    secondary_motivation: 'secondary_motivations',
-    first_seen: 'x_opencti_first_seen',
-    last_seen: 'x_opencti_last_seen',
-    alias: 'x_opencti_aliases',
-  });
-};
-
-export const toolToStix = async (tool, onlyBase = false) => {
-  const baseData = {
-    id: tool.stix_id_key,
-    x_opencti_id: tool.id,
-    type: 'tool',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, tool, {
-    name: 'name',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    tool_version: 'tool_version',
-    tool_types: 'tool_types',
-    alias: 'x_opencti_aliases',
-  });
-};
-
-export const vulnerabilityToStix = async (vulnerability, onlyBase = false) => {
-  const baseData = {
-    id: vulnerability.stix_id_key,
-    x_opencti_id: vulnerability.id,
-    type: 'vulnerability',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, vulnerability, {
-    name: 'name',
-    description: 'description',
-    stix_label: 'labels',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-  });
-};
-
-export const stixObservableToStix = async (stixObservable, onlyBase = false) => {
-  const baseData = {
-    id: stixObservable.stix_id_key,
-    x_opencti_id: stixObservable.id,
-    type: stixObservable.entity_type,
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, stixObservable, {
-    entity_type: 'x_opencti_observable_type',
-    observable_value: 'x_opencti_observable_value',
-  });
-};
-
-export const stixRelationToStix = async (stixRelation, extra = null, onlyBase = true) => {
-  let baseData = {
-    id: stixRelation.stix_id_key,
-    x_opencti_id: stixRelation.id,
-    type: 'relationship',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (extra && extra.from && extra.to) {
-    baseData = pipe(
-      assoc('source_ref', extra.from.stix_id_key),
-      assoc('x_opencti_source_ref', extra.from.internal_id_key),
-      assoc('target_ref', extra.to.stix_id_key),
-      assoc('x_opencti_target_ref', extra.to.internal_id_key)
-    )(baseData);
-  }
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, stixRelation, {
-    relationship_type: 'relationship_type',
-    description: 'description',
-    source_ref: 'source_ref',
-    target_ref: 'target_ref',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    first_seen: 'x_opencti_first_seen',
-    last_seen: 'x_opencti_last_seen',
-    weight: 'x_opencti_weight',
-    role_played: 'x_opencti_role_played',
-  });
-};
-
-export const stixSightingToStix = async (stixRelation, extra = null, onlyBase = true) => {
-  let baseData = {
-    id: stixRelation.stix_id_key,
-    x_opencti_id: stixRelation.id,
-    type: 'sighting',
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (extra && extra.from && extra.to) {
-    baseData = pipe(
-      assoc('sighting_of_ref', extra.from.stix_id_key),
-      assoc('where_sighted_refs', [extra.to.stix_id_key])
-    )(baseData);
-  }
-  if (onlyBase) {
-    return baseData;
-  }
-  return buildStixData(baseData, stixRelation, {
-    confidence: 'confidence',
-    description: 'description',
-    sighting_of_ref: 'sighting_of_ref',
-    where_sighted_refs: 'where_sighted_refs',
-    revoked: 'revoked',
-    created: 'created',
-    modified: 'modified',
-    first_seen: 'x_opencti_first_seen',
-    last_seen: 'x_opencti_last_seen',
-    negative: 'x_opencti_false_positive',
-  });
-};
-
-export const relationEmbeddedToStix = async (relationEmbedded, eventType, extra) => {
-  let entityType = extra.from.entity_type;
-  if (includes(entityType, IDENTITY_TYPES)) {
-    entityType = 'identity';
-  }
-  let data = {
-    id: extra.from.stix_id_key,
-    x_opencti_id: extra.from.id,
-    type: entityType,
-    spec_version: STIX_SPEC_VERSION,
-  };
-  if (relationEmbedded.relationship_type === 'created_by_ref') {
-    data = assoc('created_by_ref', extra.to ? extra.to.stix_id_key : null, data);
-  } else if (relationEmbedded.relationship_type === 'object_marking_refs') {
-    data = assoc('object_marking_refs', markingDefinitionsToStix([{ node: extra.to }]), data);
-  } else if (relationEmbedded.relationship_type === 'external_references') {
-    data = assoc('external_references', externalReferencesToStix([{ node: extra.to }]), data);
-  } else if (relationEmbedded.relationship_type === 'kill_chain_phases') {
-    data = assoc('kill_chain_phases', killChainPhasesToStix([{ node: extra.to }]), data);
-  } else if (relationEmbedded.relationship_type === 'object_refs') {
-    data = assoc('object_refs', objectRefsToStix([{ node: extra.to }]), data);
-  } else if (relationEmbedded.relationship_type === 'observable_refs') {
-    data = assoc('object_refs', objectRefsToStix([{ node: extra.to }]), data);
-  } else if (relationEmbedded.relationship_type === 'tagged') {
-    data = assoc('x_opencti_tags', tagsToStix([{ node: extra.to }]), data);
-  }
-  return data;
-};
-
-export const convertDataToStix = async (data, eventType = null, eventExtraData = null) => {
+export const convertDataToStix = (data, type) => {
   if (!data) {
     /* istanbul ignore next */
     throw FunctionalError('No data provided to STIX converter');
   }
-  let entityType = data.entity_type;
-  if (includes(entityType, IDENTITY_TYPES)) {
-    entityType = 'identity';
+  const entityType = data.entity_type;
+  const onlyBase = type === 'delete';
+  let finalData;
+  if (isStixObject(entityType)) {
+    finalData = buildStixData(data, onlyBase);
   }
-  if (includes(entityType, OBSERVABLE_TYPES)) {
-    entityType = 'stix_observable';
+  if (isStixCoreRelationship(entityType)) {
+    finalData = buildStixData(data, onlyBase);
   }
-  const onlyBase = eventType === 'delete';
-  switch (entityType) {
-    case 'marking-definition':
-      return markingDefinitionToStix(data, onlyBase);
-    case 'attack-pattern':
-      return attackPatternToStix(data, onlyBase);
-    case 'campaign':
-      return campaignToStix(data, onlyBase);
-    case 'course-of-action':
-      return courseOfActionToStix(data, onlyBase);
-    case 'identity':
-      return identityToStix(data, onlyBase);
-    case 'incident':
-      return incidentToStix(data, onlyBase);
-    case 'indicator':
-      return indicatorToStix(data, onlyBase);
-    case 'intrusion-set':
-      return intrusionSetToStix(data, onlyBase);
-    case 'malware':
-      return malwareToStix(data, onlyBase);
-    case 'note':
-      return noteToStix(data, onlyBase);
-    case 'opinion':
-      return opinionToStix(data, onlyBase);
-    case 'report':
-      return reportToStix(data, onlyBase);
-    case 'threat-actor':
-      return threatActorToStix(data, onlyBase);
-    case 'tool':
-      return toolToStix(data, onlyBase);
-    case 'vulnerability':
-      return vulnerabilityToStix(data, onlyBase);
-    case 'stix_observable':
-      return stixObservableToStix(data, onlyBase);
-    case 'stix_relation':
-      return stixRelationToStix(data, eventExtraData, onlyBase);
-    case 'stix_sighting':
-      return stixSightingToStix(data, eventExtraData, onlyBase);
-    case 'relation_embedded':
-      return relationEmbeddedToStix(data, eventType, eventExtraData);
-    /* istanbul ignore next */
-    default:
-      /* istanbul ignore next */
-      throw FunctionalError('Entity type is unknown, cannot convert to STIX');
+  if (isStixSightingRelationship(entityType)) {
+    finalData = buildStixData(data, onlyBase);
   }
+  if (isStixMetaRelationship(entityType)) {
+    finalData = convertStixMetaRelationshipToStix(data);
+  }
+  if (isStixCyberObservableRelationship(entityType)) {
+    finalData = convertStixCyberObservableRelationshipToStix(data);
+  }
+  if (!finalData) {
+    throw FunctionalError(`The converter is not able to convert this type of entity: ${entityType}`);
+  }
+  return finalData;
+};
+
+export const onlyStableStixIds = (ids = []) => R.filter((n) => uuidVersion(R.split('--', n)[1]) !== 1, ids);
+
+export const cleanStixIds = (ids, maxStixIds = MAX_TRANSIENT_STIX_IDS) => {
+  const keptIds = [];
+  const transientIds = [];
+  const wIds = Array.isArray(ids) ? ids : [ids];
+  for (let index = 0; index < wIds.length; index += 1) {
+    const stixId = wIds[index];
+    const segments = stixId.split('--');
+    const [, uuid] = segments;
+    const isTransient = uuidVersion(uuid) === 1;
+    if (isTransient) {
+      const timestamp = uuidTime.v1(uuid);
+      transientIds.push({ id: stixId, uuid, timestamp });
+    } else {
+      keptIds.push({ id: stixId, uuid });
+    }
+  }
+  const orderedTransient = R.sort((a, b) => b.timestamp - a.timestamp, transientIds);
+  const keptTimedIds = orderedTransient.length > maxStixIds ? orderedTransient.slice(0, maxStixIds) : orderedTransient;
+  // Return the new list
+  return R.map((s) => s.id, [...keptIds, ...keptTimedIds]);
+};
+
+export const stixCoreRelationshipsMapping = {
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_ATTACK_PATTERN}`]: [RELATION_SUBTECHNIQUE_OF],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_MALWARE}`]: [RELATION_DELIVERS, RELATION_USES],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_IDENTITY_SECTOR}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_IDENTITY_ORGANIZATION}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_IDENTITY_INDIVIDUAL}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_LOCATION_REGION}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_LOCATION_COUNTRY}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_LOCATION_CITY}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_LOCATION_POSITION}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_VULNERABILITY}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_ATTACK_PATTERN}_${ENTITY_TYPE_TOOL}`]: [RELATION_USES],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_INTRUSION_SET}`]: [RELATION_ATTRIBUTED_TO],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_THREAT_ACTOR}`]: [RELATION_ATTRIBUTED_TO],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_INFRASTRUCTURE}`]: [RELATION_COMPROMISES, RELATION_USES],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_LOCATION_REGION}`]: [RELATION_ORIGINATES_FROM, RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_LOCATION_COUNTRY}`]: [RELATION_ORIGINATES_FROM, RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_LOCATION_CITY}`]: [RELATION_ORIGINATES_FROM, RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_LOCATION_POSITION}`]: [RELATION_ORIGINATES_FROM, RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_IDENTITY_SECTOR}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_IDENTITY_ORGANIZATION}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_IDENTITY_INDIVIDUAL}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_VULNERABILITY}`]: [RELATION_TARGETS],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_ATTACK_PATTERN}`]: [RELATION_USES],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_MALWARE}`]: [RELATION_USES],
+  [`${ENTITY_TYPE_CAMPAIGN}_${ENTITY_TYPE_TOOL}`]: [RELATION_USES],
+  [`${ENTITY_TYPE_COURSE_OF_ACTION}_${ENTITY_TYPE_INDICATOR}`]: [RELATION_INVESTIGATES, RELATION_MITIGATES],
+  [`${ENTITY_TYPE_COURSE_OF_ACTION}_${ENTITY_TYPE_ATTACK_PATTERN}`]: [RELATION_MITIGATES],
+  [`${ENTITY_TYPE_COURSE_OF_ACTION}_${ENTITY_TYPE_MALWARE}`]: [RELATION_MITIGATES],
+  [`${ENTITY_TYPE_COURSE_OF_ACTION}_${ENTITY_TYPE_TOOL}`]: [RELATION_MITIGATES],
+  [`${ENTITY_TYPE_COURSE_OF_ACTION}_${ENTITY_TYPE_VULNERABILITY}`]: [RELATION_MITIGATES],
+  [`${ENTITY_TYPE_IDENTITY_SECTOR}_${ENTITY_TYPE_LOCATION_REGION}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_SECTOR}_${ENTITY_TYPE_LOCATION_COUNTRY}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_SECTOR}_${ENTITY_TYPE_LOCATION_CITY}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_SECTOR}_${ENTITY_TYPE_LOCATION_POSITION}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_SECTOR}_${ENTITY_TYPE_IDENTITY_SECTOR}`]: [RELATION_PART_OF],
+  [`${ENTITY_TYPE_IDENTITY_ORGANIZATION}_${ENTITY_TYPE_IDENTITY_SECTOR}`]: [RELATION_PART_OF],
+  [`${ENTITY_TYPE_IDENTITY_ORGANIZATION}_${ENTITY_TYPE_LOCATION_REGION}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_ORGANIZATION}_${ENTITY_TYPE_LOCATION_COUNTRY}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_ORGANIZATION}_${ENTITY_TYPE_LOCATION_CITY}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_ORGANIZATION}_${ENTITY_TYPE_LOCATION_POSITION}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_ORGANIZATION}_${ENTITY_TYPE_IDENTITY_ORGANIZATION}`]: [RELATION_PART_OF],
+  [`${ENTITY_TYPE_IDENTITY_INDIVIDUAL}_${ENTITY_TYPE_IDENTITY_INDIVIDUAL}`]: [RELATION_PART_OF],
+  [`${ENTITY_TYPE_IDENTITY_INDIVIDUAL}_${ENTITY_TYPE_IDENTITY_ORGANIZATION}`]: [RELATION_PART_OF],
+  [`${ENTITY_TYPE_IDENTITY_INDIVIDUAL}_${ENTITY_TYPE_LOCATION_REGION}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_INDIVIDUAL}_${ENTITY_TYPE_LOCATION_COUNTRY}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_INDIVIDUAL}_${ENTITY_TYPE_LOCATION_CITY}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_IDENTITY_INDIVIDUAL}_${ENTITY_TYPE_LOCATION_POSITION}`]: [RELATION_LOCATED_AT],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_ATTACK_PATTERN}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_CAMPAIGN}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_INFRASTRUCTURE}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_INTRUSION_SET}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_MALWARE}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_THREAT_ACTOR}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_TOOL}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_VULNERABILITY}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INDICATOR}_${ENTITY_TYPE_CONTAINER_OBSERVED_DATA}`]: [RELATION_BASED_ON],
+  [`${ENTITY_TYPE_INDICATOR}_${ABSTRACT_STIX_CYBER_OBSERVABLE}`]: [RELATION_BASED_ON],
+  [`${ENTITY_TYPE_INDICATOR}_${RELATION_USES}`]: [RELATION_INDICATES],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_TYPE_INFRASTRUCTURE}`]: [
+    RELATION_COMMUNICATES_WITH,
+    RELATION_CONSISTS_OF,
+    RELATION_CONTROLS,
+    RELATION_USES,
+  ],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_IPV4_ADDR}`]: [RELATION_COMMUNICATES_WITH],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_IPV6_ADDR}`]: [RELATION_COMMUNICATES_WITH],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_DOMAIN_NAME}`]: [RELATION_COMMUNICATES_WITH],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_URL}`]: [RELATION_COMMUNICATES_WITH],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_TYPE_CONTAINER_OBSERVED_DATA}`]: [RELATION_CONSISTS_OF],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ABSTRACT_STIX_CYBER_OBSERVABLE}`]: [RELATION_CONSISTS_OF, RELATION_BASED_ON],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_TYPE_MALWARE}`]: [RELATION_CONTROLS, RELATION_DELIVERS, RELATION_HOSTS],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_TYPE_VULNERABILITY}`]: [RELATION_HAS],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_TYPE_TOOL}`]: [RELATION_HOSTS],
+  [`${ENTITY_TYPE_INFRASTRUCTURE}_${ENTITY_TYPE_LOCATION_REGION}`]: [RELATION_LOCATED_AT],
+  Infrastructure_Country: ['located-at'],
+  Infrastructure_City: ['located-at'],
+  Infrastructure_Position: ['located-at'],
+  'Intrusion-Set_Threat-Actor': ['attributed-to', 'targets'],
+  'Intrusion-Set_Infrastructure': ['compromises', 'hosts', 'own', 'uses'],
+  'Intrusion-Set_Region': ['originates-from', 'targets'],
+  'Intrusion-Set_Country': ['originates-from', 'targets'],
+  'Intrusion-Set_City': ['originates-from', 'targets'],
+  'Intrusion-Set_Position': ['originates-from', 'targets'],
+  'Intrusion-Set_Sector': ['targets'],
+  'Intrusion-Set_Organization': ['targets'],
+  'Intrusion-Set_Individual': ['targets'],
+  'Intrusion-Set_Vulnerability': ['targets'],
+  'Intrusion-Set_Attack-Pattern': ['uses'],
+  'Intrusion-Set_Malware': ['uses'],
+  'Intrusion-Set_Tool': ['uses'],
+  'Malware_attack-pattern': ['uses'],
+  'Malware_Threat-Actor': ['authored-by'],
+  'Malware_Intrusion-Set': ['authored-by'],
+  Malware_Infrastructure: ['beacons-to', 'exfiltrate-to', 'targets', 'uses'],
+  'Malware_IPv4-Addr': ['communicates-with'],
+  'Malware_IPv6-Addr': ['communicates-with'],
+  'Malware_Domain-Name': ['communicates-with'],
+  Malware_Url: ['communicates-with'],
+  Malware_Malware: ['controls', 'downloads', 'drops', 'uses', 'variant-of'],
+  Malware_Tool: ['downloads', 'drops', 'uses'],
+  Malware_StixFile: ['downloads', 'drops'],
+  Malware_Vulnerability: ['exploits', 'targets'],
+  Malware_Region: ['originates-from', 'targets'],
+  Malware_Country: ['originates-from', 'targets'],
+  Malware_City: ['originates-from', 'targets'],
+  Malware_Position: ['originates-from', 'targets'],
+  Malware_Sector: ['targets'],
+  Malware_Organization: ['targets'],
+  Malware_Individual: ['targets'],
+  'Malware_Attack-Pattern': ['uses'],
+  'Threat-Actor_Organization': ['attributed-to', 'impersonates', 'targets'],
+  'Threat-Actor_Individual': ['attributed-to', 'impersonates', 'targets'],
+  'Threat-Actor_Sector': ['targets'],
+  'Threat-Actor_Infrastructure': ['compromises', 'hosts', 'owns', 'uses'],
+  'Threat-Actor_Region': ['located-at', 'targets'],
+  'Threat-Actor_Country': ['located-at', 'targets'],
+  'Threat-Actor_City': ['located-at', 'targets'],
+  'Threat-Actor_Position': ['located-at', 'targets'],
+  'Threat-Actor_Attack-Pattern': ['uses'],
+  'Threat-Actor_Malware': ['uses'],
+  'Threat-Actor_Tool': ['uses'],
+  'Threat-Actor_Vulnerability': ['targets'],
+  'Tool_Attack-Pattern': ['uses', 'drops', 'delivers'],
+  Tool_Malware: ['uses', 'drops', 'delivers'],
+  Tool_Vulnerability: ['has', 'targets'],
+  Tool_Sector: ['targets'],
+  Tool_Organization: ['targets'],
+  Tool_Individual: ['targets'],
+  Tool_Region: ['targets'],
+  Tool_Country: ['targets'],
+  Tool_City: ['targets'],
+  Tool_Position: ['targets'],
+  'X-OpenCTI-Incident_Intrusion-Set': ['attributed-to'],
+  'X-OpenCTI-Incident_Threat-Actor': ['attributed-to'],
+  'X-OpenCTI-Incident_Campaign': ['attributed-to'],
+  'X-OpenCTI-Incident_Infrastructure': ['compromises', 'uses'],
+  'X-OpenCTI-Incident_Region': ['originates-from', 'targets'],
+  'X-OpenCTI-Incident_Country': ['originates-from', 'targets'],
+  'X-OpenCTI-Incident_City': ['originates-from', 'targets'],
+  'X-OpenCTI-Incident_Position': ['originates-from', 'targets'],
+  'X-OpenCTI-Incident_Sector': ['targets'],
+  'X-OpenCTI-Incident_Organization': ['targets'],
+  'X-OpenCTI-Incident_Individual': ['targets'],
+  'X-OpenCTI-Incident_Vulnerability': ['targets'],
+  'X-OpenCTI-Incident_Attack-Pattern': ['uses'],
+  'X-OpenCTI-Incident_Malware': ['uses'],
+  'X-OpenCTI-Incident_Tool': ['uses'],
+  Region_Region: ['located-at'],
+  Country_Region: ['located-at'],
+  City_Country: ['located-at'],
+  Position_City: ['located-at'],
+  'IPv4-Addr_Region': ['located-at'],
+  'IPv4-Addr_Country': ['located-at'],
+  'IPv4-Addr_City': ['located-at'],
+  'IPv4-Addr_Position': ['located-at'],
+  'IPv6-Addr_Region': ['located-at'],
+  'IPv6-Addr_Country': ['located-at'],
+  'IPv6-Addr_City': ['located-at'],
+  'IPv6-Addr_Position': ['located-at'],
+  targets_Region: ['located-at'],
+  targets_Country: ['located-at'],
+  targets_City: ['located-at'],
+  targets_Position: ['located-at'],
+};
+
+export const checkStixCoreRelationshipMapping = (fromType, toType, relationshipType) => {
+  if (relationshipType === RELATION_RELATED_TO || relationshipType === RELATION_REVOKED_BY) {
+    return true;
+  }
+  if (isStixCyberObservable(toType)) {
+    if (
+      R.includes(`${fromType}_${ABSTRACT_STIX_CYBER_OBSERVABLE}`, R.keys(stixCoreRelationshipsMapping)) &&
+      R.includes(relationshipType, stixCoreRelationshipsMapping[`${fromType}_${ABSTRACT_STIX_CYBER_OBSERVABLE}`])
+    ) {
+      return true;
+    }
+  }
+  if (isStixCyberObservable(fromType)) {
+    if (
+      R.includes(`${ABSTRACT_STIX_CYBER_OBSERVABLE}_${toType}`, R.keys(stixCoreRelationshipsMapping)) &&
+      R.includes(relationshipType, stixCoreRelationshipsMapping[`${ABSTRACT_STIX_CYBER_OBSERVABLE}_${toType}`])
+    ) {
+      return true;
+    }
+  }
+  return !!R.includes(relationshipType, stixCoreRelationshipsMapping[`${fromType}_${toType}`] || []);
+};
+
+export const stixCyberObservableRelationshipsMapping = {
+  Directory_Directory: ['contains'],
+  Directory_StixFile: ['contains'],
+  'Email-Addr_User-Account': ['belongs-to'],
+  'Email-Message_Email-Addr': ['from', 'sender', 'to', 'bcc'],
+  'Email-Message_Email-Mime-Part-Type': ['body-multipart'],
+  'Email-Message_Artifact': ['raw-email'],
+  'Email-Mime-Part-Type_Artifact': ['body-raw'],
+  StixFile_Directory: ['parent-directory', 'contains'],
+  StixFile_Artifact: ['relation-content'],
+  'IPv4-Addr_Domain-Name': ['resolves-to'],
+  'IPv4-Addr_Mac-Addr': ['belongs-to'],
+  'IPv4-Addr_Autonomous-System': ['belongs-to'],
+  'IPv6-Addr_Domain-Name': ['resolves-to'],
+  'IPv6-Addr_Mac-Addr': ['belongs-to'],
+  'IPv6-Addr_Autonomous-System': ['belongs-to'],
+  'Network-Traffic_IPv4-Addr': ['src', 'dst'],
+  'Network-Traffic_IPv6-Addr': ['src', 'dst'],
+  'Network-Traffic_Network-Traffic': ['encapsulates'],
+  'Network-Traffic_Artifact': ['src-payload', 'dst-payload'],
+};
+
+export const checkStixCyberObservableRelationshipMapping = (fromType, toType, relationshipType) => {
+  return !!R.includes(relationshipType, stixCyberObservableRelationshipsMapping[`${fromType}_${toType}`] || []);
 };

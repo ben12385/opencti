@@ -1,14 +1,15 @@
 .idea
 .env
+.clinic
 build
 dist
 node_modules
 public
 config/development.json
+config/development.json.bak
 config/production.json
 config/test.json
 config/local.json
-config/development.demo.json
 coverage
 test-results
 logs

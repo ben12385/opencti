@@ -18,7 +18,6 @@ export const EXPLORE_EXUPDATE_EXDELETE = 'EXPLORE_EXUPDATE_EXDELETE';
 export const MODULES = 'MODULES';
 export const MODULES_MODMANAGE = 'MODULES_MODMANAGE';
 export const SETTINGS = 'SETTINGS';
-export const SETTINGS_SETINFERENCES = 'SETTINGS_SETINFERENCES';
 export const SETTINGS_SETACCESSES = 'SETTINGS_SETACCESSES';
 export const SETTINGS_SETMARKINGS = 'SETTINGS_SETMARKINGS';
 
@@ -28,7 +27,10 @@ const granted = (me, capabilities, matchAll = false) => {
   const availableCapabilities = [];
   for (let index = 0; index < capabilities.length; index += 1) {
     const checkCapability = capabilities[index];
-    const matchingCapabilities = filter((r) => includes(checkCapability, r), userCapabilities);
+    const matchingCapabilities = filter(
+      (r) => includes(checkCapability, r),
+      userCapabilities,
+    );
     if (matchingCapabilities.length > 0) availableCapabilities.push(checkCapability);
   }
   if (matchAll) return availableCapabilities.length === capabilities.length;
@@ -39,7 +41,7 @@ const Security = ({
   needs, matchAll, children, placeholder = <span />,
 }) => (
   <UserContext.Consumer>
-    {(me) => {
+    {({ me }) => {
       if (granted(me, needs, matchAll)) return children;
       return placeholder;
     }}

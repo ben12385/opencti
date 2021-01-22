@@ -1,78 +1,41 @@
-export const checkObservableSyntax = (observableType, observableValue) => {
+/* eslint-disable no-case-declarations,import/prefer-default-export */
+import * as C from '../schema/stixCyberObservable';
+
+export const checkObservableSyntax = (observableType, observableData) => {
   switch (observableType) {
-    case 'autonomous-system':
-      if (!/^AS\d{0,10}$/.test(observableValue)) {
-        return 'AS followed by numbers';
-      }
+    case C.ENTITY_AUTONOMOUS_SYSTEM:
+      const systemChecker = /^\d{0,10}$/;
+      if (!systemChecker.test(observableData.number)) return 'AS followed by numbers';
       break;
-    case 'directory':
-      if (!/^(\w+\.?)*\w+$/.test(observableValue)) {
-        return 'Valid directory chars';
-      }
+    case C.ENTITY_DIRECTORY:
+      const directoryChecker = /^(\w+\.?)*\w+$/;
+      if (!directoryChecker.test(observableData.path)) return 'Valid directory chars';
       break;
-    case 'domain':
-      if (
-        !/^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/.test(
-          observableValue
-        )
-      ) {
-        return 'Valid domain name';
-      }
+    case C.ENTITY_DOMAIN_NAME:
+      const domainChecker = /^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$/;
+      if (!domainChecker.test(observableData.value)) return 'Valid domain name';
       break;
-    case 'hostname':
-      if (
-        !/^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/.test(
-          observableValue
-        )
-      ) {
-        return 'Valid hostname';
-      }
+    case C.ENTITY_X_OPENCTI_HOSTNAME:
+      const hostnameChecker = /^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$/;
+      if (!hostnameChecker.test(observableData.value)) return 'Valid hostname';
       break;
-    case 'email-address':
-      if (
-        !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
-          observableValue
-        )
-      ) {
-        return 'Valid email address';
-      }
+    case C.ENTITY_EMAIL_ADDR:
+      const emailChecker = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+      if (!emailChecker.test(observableData.value)) return 'Valid email address';
       break;
-    case 'file-md5':
-      if (!/^[a-f0-9]{32}$/.test(observableValue)) {
-        return 'Valid MD5 hash';
-      }
+    case C.ENTITY_IPV4_ADDR:
+      const ipv4Checker = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:\/([0-9]|[1-2][0-9]|3[0-2]))?$/.test(observableData.value);
+      if (!ipv4Checker) return 'Valid IPv4 address';
       break;
-    case 'file-sha1':
-      if (!/^[0-9a-f]{5,40}$/.test(observableValue)) {
-        return 'Valid SHA1 hash';
-      }
+    case C.ENTITY_IPV6_ADDR:
+      const ipv6Checker = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))(?:\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))?$/;
+      if (!ipv6Checker.test(observableData.value)) return 'Valid IPv6 address';
       break;
-    case 'file-sha256':
-      if (!/^[A-Fa-f0-9]{64}$/.test(observableValue)) {
-        return 'Valid SHA256 hash';
-      }
-      break;
-    case 'ipv4-addr':
-      if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(observableValue)) {
-        return 'Valid IPv4 address';
-      }
-      break;
-    case 'ipv6-addr':
-      if (
-        !/^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/.test(
-          observableValue
-        )
-      ) {
-        return 'Valid IPv6 address';
-      }
-      break;
-    case 'mac-addr':
-      if (!/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(observableValue)) {
-        return 'Valid MAC address';
-      }
+    case C.ENTITY_MAC_ADDR:
+      const macAddrChecker = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+      if (!macAddrChecker.test(observableData.value)) return 'Valid MAC address';
       break;
     default:
-      // TODO: return false
       return true;
   }
   return true;

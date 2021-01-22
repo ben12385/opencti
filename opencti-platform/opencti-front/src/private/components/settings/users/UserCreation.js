@@ -16,6 +16,7 @@ import Alert from '@material-ui/lab/Alert';
 import inject18n from '../../../../components/i18n';
 import { commitMutation } from '../../../../relay/environment';
 import TextField from '../../../../components/TextField';
+import MarkDownField from '../../../../components/MarkDownField';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -211,6 +212,15 @@ class UserCreation extends Component {
                     name="lastname"
                     label={t('Lastname')}
                     fullWidth={true}
+                    style={{ marginTop: 20 }}
+                  />
+                  <Field
+                    component={MarkDownField}
+                    name="description"
+                    label={t('Description')}
+                    fullWidth={true}
+                    multiline={true}
+                    rows={4}
                     style={{ marginTop: 20 }}
                   />
                   <Field

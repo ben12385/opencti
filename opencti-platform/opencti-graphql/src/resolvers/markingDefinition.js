@@ -11,7 +11,6 @@ import {
 } from '../domain/markingDefinition';
 import { fetchEditContext, pubsub } from '../database/redis';
 import withCancel from '../graphql/subscriptionWrapper';
-import { REL_INDEX_PREFIX } from '../database/elasticSearch';
 import { convertDataToStix } from '../database/stix';
 
 const markingDefinitionResolvers = {
@@ -19,11 +18,8 @@ const markingDefinitionResolvers = {
     markingDefinition: (_, { id }) => findById(id),
     markingDefinitions: (_, args) => findAll(args),
   },
-  MarkingDefinitionsFilter: {
-    markedBy: `${REL_INDEX_PREFIX}object_marking_refs.internal_id_key`,
-  },
   MarkingDefinition: {
-    toStix: (markingDefinition) => convertDataToStix(markingDefinition).then((stixData) => JSON.stringify(stixData)),
+    toStix: (markingDefinition) => JSON.stringify(convertDataToStix(markingDefinition)),
     editContext: (markingDefinition) => fetchEditContext(markingDefinition.id),
   },
   Mutation: {
